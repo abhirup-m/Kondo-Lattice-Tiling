@@ -1,0 +1,43 @@
+\documentclass[%
+ reprint,
+superscriptaddress,
+groupedaddress,
+aps,superscriptaddress,
+pra,onecolumn,12pt
+]{revtex4-2}
+\usepackage[margin=1.5cm]{geometry}
+\usepackage{graphicx,braket,bm,hyperref,amsmath,amssymb}
+
+\begin{document}
+
+\title{Quantum criticality in a Kondo-Mott Lattice Model}
+
+\author{Abhirup Mukherjee}
+\author{Siddhartha Lal}
+
+\date{\today}
+
+\maketitle
+\section{Impurity Model}
+\begin{equation}\begin{aligned}
+	H_\text{aux}({\bf r}_d) = H_f^{(0)} + H_f({\bf r}_d) + H_c^{(0)} + H_c({\bf r}_d) + H_{fc}({\bf r}_d)~,
+\end{aligned}\end{equation}
+where
+\begin{equation}\begin{aligned}
+	H_f^{(0)} =& -t_f\sum_{\braket{i,j},\sigma}\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right)~,\\
+	H_c^{(0)} =& -t\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right)~,\\
+	H_f({\bf r}_d) =& V_f\sum_{Z \in \text{NN}}\sum_{\sigma}\left(f^\dagger_{{\bf r}_d,\sigma} f_{Z,\sigma} + \text{h.c.}\right) - \frac{U_f}{2}\left(f^\dagger_{{\bf r}_d,\uparrow}f_{{\bf r}_d,\uparrow} - f^\dagger_{{\bf r}_d,\downarrow}f_{{\bf r}_d,\downarrow}\right)^2 \\
+				   &+ J_f\sum_{Z \in \text{NN}}\sum_{\alpha,\beta}{\bf S}_f({\bf r}_d) \cdot {\boldsymbol{\sigma}}_{\alpha\beta}f^\dagger_{Z,\alpha}f_{Z,\beta} - \frac{W_f}{2} \sum_{Z \in \text{NN}}\left(f^\dagger_{Z,\uparrow}f_{Z,\uparrow} - f^\dagger_{Z,\downarrow}f_{Z,\downarrow} \right)^2~,\\
+	H_c({\bf r}_d) =& - \frac{W}{2}\left(c^\dagger_{{\bf r}_d,\uparrow}c_{{\bf r}_d,\uparrow} - c^\dagger_{{\bf r}_d,\downarrow}c_{{\bf r}_d,\downarrow} \right)^2~,\\
+	H_{fc}({\bf r}_d) =& J\sum_{\alpha,\beta}{\bf S}_f({\bf r}_d) \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{{\bf r}_d,\alpha}c_{{\bf r}_d,\beta} + V \left(f^\dagger_{{\bf r}_d,\sigma} c_{{\bf r}_d,\sigma} + \text{h.c.}\right)~,\\
+\end{aligned}\end{equation}
+
+\section{Tiling reconstruction}
+\begin{equation}\begin{aligned}
+	H_\text{tiled} =& \sum_{{\bf r}_d}H_\text{aux}({\bf r}_d) - (N-1) \left[H_f^{(0)} + H_f^{(0)}\right] \\
+				   =& -t_f\sum_{\braket{i,j},\sigma}\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right) + \tilde J \sum_{\braket{i,j}}{\bf S}_f(i) \cdot {\bf S_f}(j) + J\sum_i {\bf S}_f(i)\cdot {\bf S}_c(i) \\
+				   &- U\sum_i \left(f^\dagger_{i,\uparrow}f_{i,\uparrow} - f^\dagger_{i,\downarrow}f_{i,\downarrow}\right)^2
+\end{aligned}\end{equation}
+
+
+\end{document}
