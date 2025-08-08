@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2026/dev/Arch Linux) (preloaded format=xelatex 2025.3.24)  7 AUG 2025 20:15
+This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2026/dev/Arch Linux) (preloaded format=xelatex 2025.3.24)  9 AUG 2025 10:55
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -63,16 +63,20 @@ Class revtex4-2 Info: Overriding \@vspace, \@vspacer, \@no@pgbk, \@newline, and 
 \@bibdataout=\write3
 \widetext@top=\box65
 \widetext@bot=\box66
-Class revtex4-2 Info: Selecting society aps on input line 7669.
+
+Class revtex4-2 Warning: No Society specified, using default society aps.
+
 (/usr/share/texmf-dist/tex/latex/revtex/aps4-2.rtx
 File: aps4-2 2022/06/05 4.2f (https://journals.aps.org/revtex/ for documentation)
 Class revtex4-2 Info: RevTeX society APS selected on input line 40.
 )
-Class revtex4-2 Info: Selecting journal pra on input line 7671.
+
+Class revtex4-2 Warning: No journal specified, using default pra.
+
 Class revtex4-2 Info: APS journal PRA selected on input line 7672.
- (/usr/share/texmf-dist/tex/latex/revtex/aps12pt4-2.rtx
-File: aps12pt4-2 2022/06/05 4.2f (https://journals.aps.org/revtex/ for documentation)
-Class revtex4-2 Info: RevTeX pointsize 12pt selected on input line 39.
+(/usr/share/texmf-dist/tex/latex/revtex/aps10pt4-2.rtx
+File: aps10pt4-2 2022/06/05 4.2f (https://journals.aps.org/revtex/ for documentation)
+Class revtex4-2 Info: RevTeX pointsize 10pt selected on input line 39.
 ) (/usr/share/texmf-dist/tex/latex/textcase/textcase.sty
 Package: textcase 2025/02/16 v1.05 Text only upper/lower case changing (DPC)
 Package textcase Info: Defining Legacy names on input line 20.
@@ -362,23 +366,23 @@ LaTeX Font Info:    ... okay on input line 11.
 * layout: <same size as paper>
 * layoutoffset:(h,v)=(0.0pt,0.0pt)
 * modes: 
-* h-part:(L,W,R)=(42.67912pt, 528.93675pt, 42.67912pt)
-* v-part:(T,H,B)=(42.67912pt, 709.61174pt, 42.67912pt)
+* h-part:(L,W,R)=(28.45274pt, 557.38951pt, 28.45274pt)
+* v-part:(T,H,B)=(28.45274pt, 738.0645pt, 28.45274pt)
 * \paperwidth=614.295pt
 * \paperheight=794.96999pt
-* \textwidth=528.93675pt
-* \textheight=709.61174pt
-* \oddsidemargin=-29.59087pt
-* \evensidemargin=-29.59087pt
-* \topmargin=-66.59087pt
-* \headheight=12.0pt
-* \headsep=25.0pt
+* \textwidth=557.38951pt
+* \textheight=738.0645pt
+* \oddsidemargin=-43.81725pt
+* \evensidemargin=-43.81725pt
+* \topmargin=-84.81725pt
+* \headheight=25.0pt
+* \headsep=16.0pt
 * \topskip=10.0pt
 * \footskip=30.0pt
-* \marginparwidth=44.0pt
-* \marginparsep=10.0pt
-* \columnsep=10.0pt
-* \skip\footins=25.25pt plus 4.0pt minus 12.0pt
+* \marginparwidth=30.0pt
+* \marginparsep=6.0pt
+* \columnsep=18.0pt
+* \skip\footins=39.0pt plus 4.0pt minus 12.0pt
 * \hoffset=0.0pt
 * \voffset=0.0pt
 * \mag=1000
@@ -407,21 +411,31 @@ File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 LaTeX Font Info:    Trying to load font information for U+msb on input line 22.
  (/usr/share/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
-) (./PAMNotes.bbl) [1] (./PAMNotes.aux)
+) [1] [2]
+Underfull \hbox (badness 10000) in paragraph at lines 107--108
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 114--116
+
+ []
+
+(./PAMNotes.bbl) [3] (./PAMNotes.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
 Package rerunfilecheck Info: File `PAMNotes.out' has not changed.
-(rerunfilecheck)             Checksum: 437F38863B8F253FEA04127CEE95A800;596.
+(rerunfilecheck)             Checksum: 0E8D322FBF53EBE32E978CB8D2CE6085;1910.
  ) 
 Here is how much of TeX's memory you used:
- 11816 strings out of 475848
- 174525 string characters out of 5776013
- 599002 words of memory out of 5000000
- 34607 multiletter control sequences out of 15000+600000
- 566667 words of font info for 71 fonts, out of 8000000 for 9000
+ 11806 strings out of 475848
+ 174485 string characters out of 5776013
+ 613390 words of memory out of 5000000
+ 34601 multiletter control sequences out of 15000+600000
+ 563717 words of font info for 62 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 72i,12n,79p,341b,388s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 72i,12n,79p,839b,388s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on PAMNotes.xdv (1 page, 8456 bytes).
+Output written on PAMNotes.xdv (3 pages, 51984 bytes).

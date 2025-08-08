@@ -1,11 +1,11 @@
 \documentclass[%
- reprint,
+reprint,
 superscriptaddress,
 groupedaddress,
-aps,superscriptaddress,
-pra,onecolumn,12pt
+superscriptaddress,
+onecolumn,
 ]{revtex4-2}
-\usepackage[margin=1.5cm]{geometry}
+\usepackage[margin=1cm]{geometry}
 \usepackage{graphicx,braket,bm,hyperref,amsmath,amssymb}
 
 \begin{document}
@@ -37,6 +37,97 @@ where
 	H_\text{tiled} =& \sum_{{\bf r}_d}H_\text{aux}({\bf r}_d) - (N-1) \left[H_f^{(0)} + H_f^{(0)}\right] \\
 				   =& -t_f\sum_{\braket{i,j},\sigma}\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right) + \tilde J \sum_{\braket{i,j}}{\bf S}_f(i) \cdot {\bf S_f}(j) + J\sum_i {\bf S}_f(i)\cdot {\bf S}_c(i) \\
 				   &- U\sum_i \left(f^\dagger_{i,\uparrow}f_{i,\uparrow} - f^\dagger_{i,\downarrow}f_{i,\downarrow}\right)^2
+\end{aligned}\end{equation}
+
+\section{Coupling renormalisation group flows}
+Off-diagonal terms:
+\begin{equation}\begin{aligned}
+	H_{X, f} &= \frac{1}{2}\sum_{{\bf q},{\bf k},\sigma}J_f({\bf k},{\bf q}) S_f^\sigma \left(f^\dagger_{{\bf q},-\sigma}f_{{\bf k},\sigma} + f^\dagger_{{\bf k},-\sigma}f_{{\bf q},\sigma}\right) + \frac{1}{2}\sum_{{\bf q},{\bf k},\sigma}J_f({\bf k},{\bf q}) \sigma S_f^z \left(f^\dagger_{{\bf q},\sigma}f_{{\bf k},\sigma} + f^\dagger_{{\bf k},\sigma}f_{{\bf q},\sigma}\right)~,\\
+	H_{X, c} &= \frac{1}{2}J\sum_{{\bf q},{\bf k},\sigma} S_f^\sigma \left(c^\dagger_{{\bf q},-\sigma}c_{{\bf k},\sigma} + c^\dagger_{{\bf k},-\sigma}c_{{\bf q},\sigma}\right) + \frac{1}{2}J\sum_{{\bf q},{\bf k},\sigma} \sigma S_f^z \left(c^\dagger_{{\bf q},\sigma}c_{{\bf k},\sigma} + c^\dagger_{{\bf k},\sigma}c_{{\bf q},\sigma}\right)~.
+\end{aligned}\end{equation}
+
+\subsection{Intra-layer processes}
+\begin{equation}\begin{aligned}
+	\Delta J_f^{(j)}\left({\bf k}_1, {\bf k}_2\right) &= -\sum_{{\bf q} \in \text{PS}} \left(J_f^{(j)}\left({\bf k}_2,{\bf q}\right) J_f^{(j)}\left({\bf q},{\bf k}_1\right) + 4J_f^{(j)}\left({\bf q}, {\bf \bar q}\right) W_{{\bf \bar q}, {\bf k}_2, {\bf k}_1, {\bf q}}\right) G_f(\omega, {\bf q})~,\\
+	\Delta J^{(j)} &= - \rho(\varepsilon_j)\Delta \varepsilon\cdot\left(J^{(j)}\right)^2 G(\omega, {\bf q})~,
+\end{aligned}\end{equation}
+where the propagators \(G_f\) and \(G\) are defined as
+\begin{equation}\begin{aligned}\label{propagators}
+	G_f(\omega,{\bf q}) = \frac{1}{\omega - \frac{1}{2}|\varepsilon_f({\bf q})| + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + W_{{\bf q}}/2}~,~G(\omega,{\bf q}) = \frac{1}{\omega - \frac{1}{2}|\varepsilon({\bf q})| + J^{(j)}/4}~.
+\end{aligned}\end{equation}
+
+
+\subsection{Inter-layer processes}
+Processes that start from configurations in which \({\bf q}\) is occupied:
+\begin{equation}\begin{aligned}
+	P_1 = \frac{1}{8}\sum_{{\bf q},{\bf k},{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} J_f^{(j)}({\bf q},{\bf k}) S_f^\sigma f^\dagger_{{\bf q},-\sigma}f_{{\bf k},\sigma} ~ G_f(\omega, {\bf q}, {\bf k}) ~ J^{(j)} S_f^z \sigma^\prime c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~ G_f(\omega, {\bf q}, {\bf k}) ~ J_f^{(j)}({\bf q},{\bf k}) S_f^{-\sigma} f^\dagger_{{\bf k},\sigma}f_{{\bf q},-\sigma}~,
+\end{aligned}\end{equation}
+where the propagator \(G_f(\omega)\) for the excitations is a generalisation of eq.~\ref{propagators}:
+\begin{equation}\begin{aligned}
+	G_f(\omega, {\bf q}, {\bf k}) = \frac{1}{\omega - \frac{1}{2}|\varepsilon_f({\bf q})| + \frac{1}{2}|\varepsilon_f({\bf k})| + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + W_{{\bf q}}/2}~.
+\end{aligned}\end{equation}
+Using \(S^\sigma S^z = -\frac{\sigma}{2}S^\sigma\) and \(S^\sigma S^{-\sigma} = \frac{1}{2} + \sigma S^z\), we get
+\begin{equation}\begin{aligned}
+	P_1 &= \sum_{{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} \frac{-\sigma^\prime}{16} \left(\frac{\sigma}{2} + S_f^z\right) c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~  J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2 G_f^2(\omega, {\bf q}, {\bf k})\\
+		&= -\frac{1}{8}\sum_{{\bf k}_1, {\bf k}_2,\sigma^\prime} \sigma^\prime~S_f^z c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~  J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2 G^2_f(\omega, {\bf q}, {\bf k})~.
+\end{aligned}\end{equation}
+
+Another process can be conceived with similar starting configuration but where the loop momenta are on the \(c-\)plane instead of the \(f-\)plane:
+\begin{equation}\begin{aligned}
+	P_2 = \frac{1}{8}\sum_{{\bf q},{\bf k},{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} J^{(j)} S_f^\sigma c^\dagger_{{\bf q},-\sigma}c_{{\bf k},\sigma} ~ G(\omega, {\bf q}, {\bf k}) ~ J^{(j)}({\bf k}_1,{\bf k}_2) S_f^z \sigma^\prime f^\dagger_{{\bf k}_1,\sigma^\prime}f_{{\bf k}_2,\sigma^\prime} ~ G(\omega, {\bf q}, {\bf k}) ~ J^{(j)} S_f^{-\sigma} c^\dagger_{{\bf k},\sigma}c_{{\bf q},-\sigma}~,
+\end{aligned}\end{equation}
+with the propagator (again a generalisation of eq.~\ref{propagators})
+\begin{equation}\begin{aligned}
+	G(\omega, {\bf q}, {\bf k}) = \frac{1}{\omega - \frac{1}{2}|\varepsilon({\bf q})| + \frac{1}{2}|\varepsilon({\bf k})| + J^{(j)}/4}~.
+\end{aligned}\end{equation}
+Using the same properties as above, the expression simplifies to:
+\begin{equation}\begin{aligned}
+	P_2 &= -\frac{1}{8}\sum_{{\bf k}_1, {\bf k}_2,\sigma^\prime} \sigma^\prime~S_f^z f^\dagger_{{\bf k}_1,\sigma^\prime}f_{{\bf k}_2,\sigma^\prime} ~  J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}G^2(\omega, {\bf q}, {\bf k})~.
+\end{aligned}\end{equation}
+
+It turns out that the processes that start from unoccupied configurations in the state \({\bf q}\) give almost identical contributions as the present expressions, the only different being that \({\bf q}\) is now summed over the hole sector (HS) while \({\bf k}\) is summed over the particle sector (PS). For a particle-hole symmetric system (which we have restricted ourselves to), these two summations are equal, so both the contributions are indeed identical. The total renormalisation can therefore be read off from the final expressions of \(P_1\) and \(P_2\) (and the hole sector is accounted for by doubling the renormalisation from just the particle sector):
+\begin{equation}\begin{aligned}
+	\Delta J_f^{(j)}({\bf k}_1,{\bf k}_2) = -\frac{1}{2}J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}G^2(\omega, {\bf q}, {\bf k})\\
+	\Delta J^{(j)} = -\frac{1}{2}J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2G^2_f(\omega, {\bf q}, {\bf k})\\
+\end{aligned}\end{equation}
+
+\subsection{Complete coupling RG equation}
+\begin{equation}\begin{aligned}\label{rgEquation}
+	\Delta J_f^{(j)}\left({\bf k}_1, {\bf k}_2\right) &= -\sum_{{\bf q} \in \text{PS}} \left[\left(J_f^{(j)}\left({\bf k}_2,{\bf q}\right) J_f^{(j)}\left({\bf q},{\bf k}_1\right) + 4J_f^{(j)}\left({\bf q}, {\bf \bar q}\right) W_{{\bf \bar q}, {\bf k}_2, {\bf k}_1, {\bf q}}\right) G_f(\omega, {\bf q}) + \frac{1}{2}J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf k} \in \text{HS}}G^2(\omega, {\bf q}, {\bf k})\right]~,\\
+	\Delta J^{(j)} &= - \rho(\varepsilon_j)\Delta \varepsilon\cdot\left(J^{(j)}\right)^2 G(\omega, {\bf q}) -\frac{1}{2}J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2G^2_f(\omega, {\bf q}, {\bf k})~,
+\end{aligned}\end{equation}
+
+\subsection{Symmetries preserved under renormalisation}
+By Fourier transforming the real-space forms of the Kondo coupling \(J_f\) and bath interaction \(W\), we get their \(k-\)space forms:
+\begin{equation}\begin{aligned}\label{momentumForm}
+	J_f({\bf k}, {\bf q}) &= \frac{J_f}{2}\left[\cos(k_x - q_x) + \cos(k_y - q_y)\right]~,\\
+	W({\bf k}, {\bf q}, {\bf k}^\prime, {\bf q}^\prime) &= \frac{W}{2}\left[\cos(k_x - q_x + k^\prime_x - q^\prime_x) + \cos(k_y - q_y + k^\prime_y - q^\prime_y)\right]~.
+\end{aligned}\end{equation}
+
+These are of course the unrenormalised forms; the Kondo coupling \(k-\)space dependence can evolve during the RG flow. The \(k-\)space sensitive form of the Kondo coupling and conduction bath interactions are invariant under symmetry transformations in the Brillouin zone.\\
+
+\par\noindent{\bf Translation by a nesting vector into opposite quadrant}\\
+Define the reciprocal lattice vectors (RLVs) \({\bf Q}_1 = \left(\pi, \pi\right)\) and \({\bf Q}_2 = \left(\pi, -\pi\right)\). The bare Kondo coupling in eq.~\ref{momentumForm} is (anti)symmetric under translation of (one)both momentum by either of the two RLVs:
+\begin{equation}\begin{aligned}
+	J_f({\bf k} + {\bf Q}_i, {\bf q}) = J_f({\bf k}, {\bf q} + {\bf Q}_i) = - J_f({\bf k}, {\bf q})~;~i = 1,2~;\\
+	J_f({\bf k} + {\bf Q}_i, {\bf q} + {\bf Q}_j) = J_f({\bf k}, {\bf q})~;~i=1,2~~j=1,2~.\\
+\end{aligned}\end{equation}
+These symmetries survive under the renormalisation group transformations. For the first transformation (under which the Kondo coupling is antisymmetric), note that each of the terms on the right hand side of the RG equation for \(J_f\) (eq.~\ref{rgEquation}) are antisymmetric as well - the third term because it's the Kondo coupling itself which automatically has the symmetry, the second term (involving \(W\)) because \(W\) is also antisymmetric under transformation of one momentum, and the first term because only one of the two \(J_f\) in the product will transform (to obtain a minus sign). This ensures that the entirety of the renormalisation transforms antisymmetrically. A very similar argument shows that the symmetry under transformation of both momenta also survives under renormalisation.\\
+
+\par\noindent{\bf Translation into adjacent quadrant}\\
+We will make use of another symmetry. Consider two momentum points linked through the relation
+\begin{equation}\begin{aligned}
+	{\bf k}_1 + {\bf k}_2 = {\bf Q}_1~.
+\end{aligned}\end{equation}
+
+
+
+
+
+\section{Reduction to Truncated 1D Representation}
+At the renormalisation group fixed point, we have a renormalised theory for the interaction of the impurity spin \(S_f\) with the \(f-\)layer Fermi surface:
+\begin{equation}\begin{aligned}
+	H^* = \sum_{\alpha,\beta}{\bf S}_f\cdot{\boldsymbol\sigma}_{\alpha,\beta}\sum_{{\bf k}, {\bf q}} f^\dagger_{{\bf k},\alpha}J_f^*({\bf k},{\bf q})f_{{\bf q},\beta}~.
 \end{aligned}\end{equation}
 
 
