@@ -67,6 +67,7 @@ function deltaJk1k2(
     deltaEnergy::Float64,
     bathIntArgs,
     densityOfStates_q::Vector{Float64},
+    interLayerTerm::Float64,
 )
     # if the flag is disabled for this momentum pair, don't bother to do the rest
     if proceed_flagk1k2 == 0 || length(denominators) == 0
@@ -78,8 +79,7 @@ function deltaJk1k2(
     renormalisation =
         -deltaEnergy * sum(
             densityOfStates_q .*
-            (kondoJ_k2q_qk1 .+ 4 .* kondoJ_qqbar .* bathIntForm(bathIntArgs...)) ./
-            denominators,
+            ((kondoJ_k2q_qk1 .+ 4 .* kondoJ_qqbar .* bathIntForm(bathIntArgs...)) ./ denominators .+ kondoJArrayPrev_k1k2 * interLayerTerm)
         )
 
     # if a non-zero coupling goes through a zero, we set it to zero, and disable its flag.
@@ -130,6 +130,7 @@ function stepwiseRenormalisation(
     size_BZ::Int64,
     deltaEnergy::Float64,
     densityOfStates::Vector{Float64},
+    interLayerTerm::Float64,
 )
 
     # construct denominators for the RG equation, given by
@@ -179,6 +180,7 @@ function stepwiseRenormalisation(
                 Tuple([cutoffHolePoints, innerIndex2, innerIndex1, cutoffPoints]),
             ],
             dOfStates_cutoff,
+            interLayerTerm,
         )
         kondoJArrayNext[innerIndex1, innerIndex2] = kondoJArrayNext_k1k2
         kondoJArrayNext[innerIndex2, innerIndex1] = kondoJArrayNext_k1k2
@@ -191,17 +193,16 @@ end
 
 @everywhere function momentumSpaceRG(
         size_BZ::Int64,
-        omega_by_t::Float64,
-        J_val::Float64,
-        Jperp_val::Float64,
-        W_val::Float64, 
-        narrowBandFactor::Float64;
+        couplings::Dict{String, Float64},
+        lightBandFactor::Float64;
         progressbarEnabled=false,
         loadData::Bool=false,
         saveData::Bool=true,
     )
+    omega_by_t, J_val, Jperp_val  = couplings["omega_by_t"], couplings["J_val"], couplings["Jperp_val"]
+    W_val, Wc_val, epsilon_d, mu_c = couplings["W_val"], couplings["Wc_val"], couplings["epsilon_d"], couplings["mu_c"]
 
-    savePath = joinpath(SAVEDIR, "rgflow-$(size_BZ)-$(omega_by_t)-$(J_val)-$(W_val).jld2")
+    savePath = joinpath(SAVEDIR, "rgflow-$(size_BZ)-$(omega_by_t)-$(J_val)-$(W_val)-$(Jperp_val)-$(Wc_val)-$(epsilon_d)-$(mu_c).jld2")
     mkpath(SAVEDIR)
     if isfile(savePath) && loadData
         _, dispersionArray = getDensityOfStates(tightBindDisp, size_BZ)
@@ -209,7 +210,7 @@ end
         kondoJArray[:, :, 1] .= initialiseKondoJ(size_BZ, trunc(Int, (size_BZ + 1) / 2), J_val)[:, :, 1]
         loadedData = jldopen(savePath)
         kondoJArray[:, :, 2] = loadedData["kondoRenorm"]
-        kondoPerp = loadedData["perp"]
+        kondoPerp = loadedData["kondoPerp"]
         return kondoJArray, kondoPerp, dispersionArray
     end
 
@@ -238,6 +239,7 @@ end
 
     # Run the RG flow starting from the maximum energy, down to the penultimate energy (ΔE), in steps of ΔE
 
+    perpDeltaSign = nothing
     for (stepIndex, energyCutoff) in enumerate(cutOffEnergies[1:end-1])
         deltaEnergy = abs(cutOffEnergies[stepIndex+1] - cutOffEnergies[stepIndex])
 
@@ -252,6 +254,15 @@ end
         end
 
         innerIndicesArr, excludedVertexPairs, mixedVertexPairs, cutoffPoints, cutoffHolePoints, proceed_flags = highLowSeparation(dispersionArray, energyCutoff, proceed_flags, size_BZ)
+
+        lightDenominators = [omega_by_t * HOP_T * lightBandFactor - cutOffEnergies[stepIndex] * lightBandFactor / 2 + kondoPerp[stepIndex]/4 + Wc_val /2 + mu_c / 2,
+                            omega_by_t * HOP_T * lightBandFactor - cutOffEnergies[stepIndex] * lightBandFactor / 2 + kondoPerp[stepIndex]/4 + Wc_val /2 - mu_c / 2
+                           ]
+        innerLoopMomenta = [
+            point for (point, energy) in enumerate(dispersionArray) if
+            abs(energy) < (abs(energyCutoff) - TOLERANCE)
+        ]
+        interLayerTerm = -0.5 * kondoPerp[stepIndex]^2 * sum(densityOfStates[innerLoopMomenta]) * deltaEnergy * sum(0.5 ./ lightDenominators)^2
 
         # calculate the renormalisation for this step and for all k1,k2 pairs
         kondoJArrayNext, proceed_flags_updated = stepwiseRenormalisation(
@@ -269,21 +280,38 @@ end
             size_BZ,
             deltaEnergy,
             densityOfStates,
+            interLayerTerm,
         )
         kondoJArray[:, :, stepIndex+1] = round.(kondoJArrayNext, digits=trunc(Int, -log10(TOLERANCE)))
         proceed_flags = proceed_flags_updated
 
-        perpDenominator = omega_by_t * HOP_T * narrowBandFactor - cutOffEnergies[stepIndex] * narrowBandFactor / 2 + kondoPerp[stepIndex]/4
-        if perpDenominator < 0
-            kondoPerp[stepIndex + 1] = kondoPerp[stepIndex] - kondoPerp[stepIndex]^2 * sum(densityOfStates[cutoffPoints]) / (omega_by_t * HOP_T * narrowBandFactor - cutOffEnergies[stepIndex] * narrowBandFactor / 2 + kondoPerp[stepIndex]/4)
-        else
-            kondoPerp[(stepIndex + 1):end] .= kondoPerp[stepIndex]
+        kondoPerp[(stepIndex + 1):end] .= kondoPerp[stepIndex]
+
+        if !isnothing(perpDeltaSign) && perpDeltaSign == 0
+            continue
+        end
+        filter!(<(0), lightDenominators)
+        if !isempty(lightDenominators)
+            kondoPerp[stepIndex + 1] -= (kondoPerp[stepIndex]^2 + 4 * kondoPerp[stepIndex] * Wc_val) * deltaEnergy * sum(densityOfStates[cutoffPoints]) * 0.5 * sum(1 ./ lightDenominators)
+        end
+
+        for q in cutoffPoints
+            heavyDenominator = omega_by_t * HOP_T - cutOffEnergies[stepIndex] / 2 + W_val / 2 + epsilon_d + kondoJArray[q, q, stepIndex] / 4
+            if heavyDenominator ≥ 0
+                continue
+            end
+            kondoPerp[stepIndex + 1] -= 0.5 * kondoPerp[stepIndex] * deltaEnergy * densityOfStates[q] * sum([densityOfStates[k] * deltaEnergy * kondoJArray[q, k, stepIndex].^2 for k in innerLoopMomenta]) / (heavyDenominator ^ 2)
+        end
+        if isnothing(perpDeltaSign)
+            perpDeltaSign = sign(kondoPerp[stepIndex+1] - kondoPerp[stepIndex])
+        elseif sign(kondoPerp[stepIndex+1] - kondoPerp[stepIndex]) * perpDeltaSign < 0
+            kondoPerp[stepIndex+1] = kondoPerp[stepIndex]
+            perpDeltaSign = 0
         end
 
     end
     if saveData
-        jldsave(savePath; compress=true, kondoRenorm=kondoJArray[:, :, end])
-        jldsave(savePath; compress=true, kondoPerp=kondoPerp)
+        jldsave(savePath, true; kondoRenorm=kondoJArray[:, :, end], kondoPerp=kondoPerp)
     end
     return kondoJArray, kondoPerp, dispersionArray
 end
