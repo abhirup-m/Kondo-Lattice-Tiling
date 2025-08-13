@@ -100,7 +100,7 @@ These are of course the unrenormalised forms; the Kondo coupling \(k-\)space dep
 
 \par\noindent{\bf Translation by a nesting vector into opposite quadrant}\\
 Define the reciprocal lattice vectors (RLVs) \({\bf Q}_1 = \left(\pi, \pi\right)\) and \({\bf Q}_2 = \left(\pi, -\pi\right)\). The bare Kondo coupling in eq.~\ref{momentumForm} is (anti)symmetric under translation of (one)both momentum by either of the two RLVs:
-\begin{equation}\begin{aligned}
+\begin{equation}\begin{aligned}\label{oppositeQ}
 	J_f({\bf k} + {\bf Q}_i, {\bf q}) = J_f({\bf k}, {\bf q} + {\bf Q}_i) = - J_f({\bf k}, {\bf q})~;~i = 1,2~;\\
 	J_f({\bf k} + {\bf Q}_i, {\bf q} + {\bf Q}_j) = J_f({\bf k}, {\bf q})~;~i=1,2~~j=1,2~.\\
 \end{aligned}\end{equation}
@@ -112,7 +112,7 @@ We will make use of another symmetry. Consider two momenta \({\bf k}\) and \({\b
 	{\bf k}_y = {\bf q}_y, ~ {\bf k}_x = -{\bf q}_x~.
 \end{aligned}\end{equation}
 We refer to \({\bf q}\) as \({\bf \bar k}\) to signal the fact the above relation between the two momenta. We first consider the bare interaction, where we have the symmetry
-\begin{equation}\begin{aligned}
+\begin{equation}\begin{aligned}\label{adjacent}
 	J_f({\bf k}, {\bf \bar k}^\prime) = J_f({\bf \bar k}, {\bf k}^\prime),~\\
 	J_f({\bf \bar k}, {\bf \bar k}^\prime) = J_f({\bf k}, {\bf k}^\prime)~.
 \end{aligned}\end{equation}
@@ -124,7 +124,44 @@ At the renormalisation group fixed point, we have a renormalised theory for the 
 \begin{equation}\begin{aligned}
 	H^* = \sum_{\alpha,\beta}{\bf S}_f\cdot{\boldsymbol\sigma}_{\alpha,\beta}\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta}~.
 \end{aligned}\end{equation}
-We will now obtain a more minimal representation of this interaction. 
+We will now obtain a more minimal representation of this interaction. Each momentum label is summed over all four quadrants \(\mathcal{Q}_1\) through \(\mathcal{Q}_4\); eq.~\ref{oppositeQ} relates \(\mathcal{Q}_1\) with \(\mathcal{Q}_3\) and \(\mathcal{Q}_2\) with \(\mathcal{Q}_4\):
+\begin{equation}\begin{aligned}
+	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
+	&= \sum_{\bf q}\left[\sum_{{\bf k} \in \mathcal{Q}_1,\mathcal{Q}_2} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha} + \sum_{{\bf k} \in \mathcal{Q}_3,\mathcal{Q}_4} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}\right] f_{{\bf q},\beta}\\
+	&= \sum_{\bf q}\left[\sum_{{\bf k} \in \mathcal{Q}_1,\mathcal{Q}_2} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha} + \sum_{{\bf k} \in \mathcal{Q}_1} J_f^*({\bf k - Q_1},{\bf q}) f^\dagger_{{\bf k - Q_1},\alpha} + \sum_{{\bf k} \in \mathcal{Q}_2} J_f^*({\bf k + Q_2},{\bf q}) f^\dagger_{{\bf k + Q_2},\alpha}\right] f_{{\bf q},\beta}\\
+	&= \sum_{\bf q}\left[\sum_{{\bf k} \in \mathcal{Q}_1} J_f^*({\bf k},{\bf q}) \left(f^\dagger_{{\bf k},\alpha} - f^\dagger_{{\bf k - Q_1},\alpha}\right) + \sum_{{\bf k} \in \mathcal{Q}_2} J_f^*({\bf k},{\bf q}) \left(f^\dagger_{{\bf k},\alpha} - f^\dagger_{{\bf k + Q_2},\alpha}\right) \right] f_{{\bf q},\beta}~.
+\end{aligned}\end{equation}
+For ease of notation, we define new fermionic operators \(A_{{\bf k},\sigma}\) and \(B_{{\bf k},\sigma}\):
+\begin{equation}\begin{aligned}
+	A_{{\bf k},\sigma} = \frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} - f_{{\bf k - Q_1},\sigma}\right), {\bf k}\in\mathcal{Q}_1~,\\
+	B_{{\bf k},\sigma} = \frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} - f_{{\bf k + Q_2},\sigma}\right), {\bf k}\in\mathcal{Q}_2~,
+\end{aligned}\end{equation}
+which satisfy the appropriate algebra: \(\left\{A_{{\bf k},\sigma}, A_{{\bf k}^\prime,\sigma^\prime}\right\} = \left\{B_{{\bf k},\sigma}, B_{{\bf k}^\prime,\sigma^\prime}\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\) and \(\left\{A_{{\bf k},\sigma}, B_{{\bf k}^\prime,\sigma^\prime}\right\} = 0\).
+
+Decomposing the sum over \({\bf q}\) in a similar fashion, we get
+\begin{equation}\begin{aligned}
+	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
+	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + 2\sum_{{\bf k} \in \mathcal{Q}_2, {\bf q} \in \mathcal{Q}_1} J_f^*({\bf k},{\bf q}) B^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} \\
+	&+ 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_2} J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}B_{{\bf q},\beta} + 2\sum_{{\bf k} \in \mathcal{Q}_2, {\bf q} \in \mathcal{Q}_2} J_f^*({\bf k},{\bf q}) B^\dagger_{{\bf k},\alpha}B_{{\bf q},\beta}~.
+\end{aligned}\end{equation}
+
+To further simplify things, We first replace the summations over \(\mathcal{Q}_2\) with that over \(\mathcal{Q}_1\), with the mapping \({\bf q} \to {\bf \bar q}\) and use eq.~\ref{adjacent}:
+\begin{equation}\begin{aligned}
+	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
+	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + J_f^*({\bf \bar k},{\bf q}) B^\dagger_{{\bf k},\alpha}A_{{\bf \bar q},\beta} + J_f^*({\bf k},{\bf \bar q}) A^\dagger_{{\bf k},\alpha}B_{{\bf \bar q},\beta} + J_f^*({\bf \bar k},{\bf \bar q}) B^\dagger_{{\bf \bar k},\alpha}B_{{\bf \bar q},\beta}\right]\\
+	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[J_f^*({\bf k},{\bf q}) \left(A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + B^\dagger_{{\bf \bar k},\alpha}B_{{\bf \bar q},\beta}\right) + J_f^*({\bf \bar k},{\bf q}) \left(B^\dagger_{{\bf k},\alpha}A_{{\bf \bar q},\beta} + A^\dagger_{{\bf k},\alpha}B_{{\bf \bar q},\beta}\right)\right] ~.
+\end{aligned}\end{equation}
+To remove all explicit references to operators in \(\mathcal{Q}_2\), we define a new set of operators:
+\begin{equation}\begin{aligned}
+	\gamma_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma} \pm B_{{\bf \bar k},\sigma}\right), {\bf k}\in \mathcal{Q}_1~,
+\end{aligned}\end{equation}
+which are again fermionic: \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\pm}^\dagger\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\), \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\mp}^\dagger\right\} = 0\). In terms of these new operator, we finally obtain a Hamiltonian which is formally defined on just the first quadrant \(\mathcal{Q}_1\) (this is however purely formal because there are now twice as many modes on \(\mathcal{Q}_1\) than before):
+\begin{equation}\begin{aligned}
+	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
+	&= \sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[\left[J_f^*({\bf k},{\bf q}) + J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,+}\gamma_{{\bf q},\alpha,+} + \left[J_f^*({\bf k},{\bf q}) - J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,-}\gamma_{{\bf q},\alpha,-}\right] \\
+\end{aligned}\end{equation}
+
+
 
 
 \end{document}
