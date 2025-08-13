@@ -344,3 +344,20 @@ function Integrate(
     )
     return sum([y * (xvals[i+1] - xvals[i]) for (i, y) in enumerate(yvals[1:end-1])]) + yvals[end] * (xvals[end] - xvals[end-1])
 end
+
+
+function SavePath(
+        prefix::String,
+        size_BZ::Int64,
+        couplings::Dict{String, Float64},
+        extension::String,
+    )
+
+    path = "$(prefix)-$(size_BZ)"
+
+    coupNames = ["omega_by_t", "kondo_f", "kondo_perp", "Wf", "Wc", "epsilon_d", "mu_c", "lightBandFactor"]
+    for k in filter(∈(keys(couplings)), coupNames)
+        path *= "-$(couplings[k])"
+    end
+    return path*".$(extension)"
+end
