@@ -1,4 +1,5 @@
 (@isdefined SAVEDIR) || const SAVEDIR = "saveData"
+(@isdefined RELEVANT_CUTOFF) || const RELEVANT_CUTOFF = 1 + 1e-8
 
 (@isdefined PLANCK) || const PLANCK = 6.626e-34
 (@isdefined MASS_ELE) || const MASS_ELE = 9.109e-31

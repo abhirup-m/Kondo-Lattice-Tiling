@@ -1,4 +1,4 @@
-using LinearAlgebra, Distributed, ProgressMeter
+#=using LinearAlgebra, Distributed, ProgressMeter=#
 
 function getCutOffEnergy(size_BZ)
     kx_pos_arr = [kx for kx in range(K_MIN, K_MAX, length=size_BZ) if kx >= 0]
@@ -305,6 +305,9 @@ end
         elseif sign(kondoPerpArray[stepIndex+1] - kondoPerpArray[stepIndex]) * perpDeltaSign < 0
             kondoPerpArray[stepIndex+1] = kondoPerpArray[stepIndex]
             perpDeltaSign = 0
+        end
+        if kondoPerpArray[stepIndex+1] * kondoPerpArray[stepIndex] ≤ 0
+            kondoPerpArray[(stepIndex+1):end] .= 0
         end
 
     end

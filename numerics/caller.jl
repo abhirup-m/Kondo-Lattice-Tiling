@@ -1,13 +1,14 @@
-using Distributed
+using Distributed, CSV, CodecZlib, Combinatorics, Serialization, PDFmerger, PyPlot
+using Fermions
 
-@everywhere using LinearAlgebra, CSV, JLD2, FileIO, CodecZlib, ProgressMeter, JSON3
+@everywhere using FileIO, JSON3, LinearAlgebra, ProgressMeter, JLD2
 
 @everywhere include("Constants.jl")
 @everywhere include("Helpers.jl")
 @everywhere include("RgFlow.jl")
-@everywhere include("PhaseDiagram.jl")
-@everywhere include("Probes.jl")
-@everywhere include("PltStyle.jl")
+include("PhaseDiagram.jl")
+include("Probes.jl")
+include("PltStyle.jl")
 
 global kondo_f = 0.1
 global kondo_perp = 0.0
@@ -75,45 +76,54 @@ function PhaseDiagram(
         loadData::Bool=false,
         fillPG::Bool=false,
     )
+    @assert minimum(kondo_perpLims) > 0
     epsilon_f = 0.5 * HOP_T
-    fig, axes = plt.subplots(nrows=5, ncols=5, figsize=(60, 60))
-    for (i, kondo_f) in enumerate((0.1:0.1:0.5) .* HOP_T)
-        for (j, Wc) in enumerate(0.0:-0.2:-0.8)
-            phaseDiagram = PhaseDiagram(size_BZ, kondo_perpLims, kondo_perpSpacing, WfLims, WfSpacing, 
+    kondo_f_arr = (0.1:0.1:0.2) .* HOP_T
+    Wc_arr = (0.0:-0.2:-0.2) .* HOP_T
+    WfVals = collect(minimum(WfLims):WfSpacing:maximum(WfLims))
+    JperpVals = collect(minimum(kondo_perpLims):kondo_perpSpacing:maximum(kondo_perpLims))
+    fig, axes = PyPlot.subplots(nrows=length(kondo_f_arr), ncols=length(Wc_arr), figsize=(12 * length(Wc_arr), 12 * length(kondo_f_arr)))
+    for (i, kondo_f) in enumerate(kondo_f_arr)
+        for (j, Wc) in enumerate(Wc_arr)
+            phaseDiagram_Jf, phaseDiagram_J = PhaseDiagram(size_BZ, kondo_perpLims, kondo_perpSpacing, WfLims, WfSpacing, 
                                    Dict("omega_by_t"=>OMEGA_BY_t, "Wc"=>Wc, "kondo_f"=>kondo_f, 
                                         "epsilon_f"=>epsilon_f, "mu_c"=>mu_c, "lightBandFactor"=>lightBandFactor);
                                    loadData=loadData, fillPG=fillPG
                                   )
-            hmap = axes[i,j].imshow(phaseDiagram, aspect="auto", origin="lower", 
+            hmap = axes[i,j].imshow(phaseDiagram_Jf, aspect="auto", origin="lower", 
                                     extent=(minimum(WfLims), 
                                             maximum(WfLims), 
                                             minimum(kondo_perpLims), 
                                             maximum(kondo_perpLims)
                                            ),
-                                    cmap="Spectral",
+                                    cmap = plt.get_cmap(CMAP, 3),
                                    )
+            for flag in [2, 3]
+                pairs = findall(==(flag), phaseDiagram_J)[1:10:end]
+                axes[i,j].scatter([WfVals[p[1]] for p in pairs], [JperpVals[p[2]] for p in pairs], marker=["x","o"][flag - 1], color="white", s=6)
+            end
 
             if j == 1
                 axes[i, 1].set_ylabel(L"J")
-                axes[i, j].text(-0.45, 0.5, "\$J_f=$(round(kondo_f, digits=2))\$", horizontalalignment="center", verticalalignment="center", transform=axes[i,j].transAxes, fontsize=16, bbox=Dict("facecolor"=>"red", "alpha"=>0.1, "boxstyle"=>"Round,pad=0.2"))
+                axes[i, j].text(-0.45, 0.5, "\$J_f=$(round(kondo_f, digits=2))\$", horizontalalignment="center", verticalalignment="center", transform=axes[i,j].transAxes, bbox=Dict("facecolor"=>"red", "alpha"=>0.1, "boxstyle"=>"Round,pad=0.2"))
             end
             if i == 1
-                axes[i, j].text(0.5, 1.2, "\$W=$(round(Wc, digits=2))\$", horizontalalignment="center", verticalalignment="center", transform=axes[i,j].transAxes, fontsize=16, bbox=Dict("facecolor"=>"red", "alpha"=>0.1, "boxstyle"=>"Round,pad=0.2"))
+                axes[i, j].text(0.5, 1.2, "\$W=$(round(Wc, digits=2))\$", horizontalalignment="center", verticalalignment="center", transform=axes[i,j].transAxes, bbox=Dict("facecolor"=>"red", "alpha"=>0.1, "boxstyle"=>"Round,pad=0.2"))
             end
-            if i == 5
-                axes[5, j].set_xlabel(L"W_f")
+            if i == length(kondo_f_arr)
+                axes[length(kondo_f_arr), j].set_xlabel(L"W_f")
             end
-            if j == 5
-                fig.colorbar(hmap)
+            if j == length(Wc_arr)
+                fig.colorbar(hmap, ticks=[0, 0.5, 1])
             end
         end
     end
     fig.tight_layout()
-    savefig("phaseDiagram-$(size_BZ).pdf", bbox_inches="tight"); PyPlot.close()
+    savefig("PD-$(size_BZ)-$(epsilon_f)-$(mu_c)-$(lightBandFactor).pdf", bbox_inches="tight"); PyPlot.close()
 end
 
 
-PhaseDiagram(13, (0.0, 1.0), 0.01, (-0.0, -0.8), 0.01; loadData=false)
+PhaseDiagram(13, (0.01, 1.0), 0.005, (-0.01, -1.0), 0.005; loadData=false)
 
 #=postProcess(data) = reshape(data, (size_BZ, size_BZ)) .|> abs=#
 #==#
