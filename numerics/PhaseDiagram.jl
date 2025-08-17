@@ -46,14 +46,14 @@ end
         maxIter::Int64=100,
     )
     fracToIndex(f) = ifelse(f == 1, 1, ifelse(f > 0, 2, 3))
-    perpRatioToIndex(f) = ifelse(f ≥ 1 + RG_RELEVANCE_TOL, 3, ifelse(f ≥ RG_RELEVANCE_TOL, 2, 1))
+    perpRatioToIndex(f) = ifelse(f ≥ 1.2, 3, ifelse(f ≥ 0.5, 2, 1))
 
     savePathCrit = joinpath(SAVEDIR, SavePath("Wfcrit", size_BZ, couplings, "json"))
     criticalWfData = Dict{String,Dict{String, Vector{Float64}}}()
     if isfile(savePathCrit) && loadData
         merge!(criticalWfData, JSON3.read(read(savePathCrit, String), typeof(criticalWfData)))
         if string(WfSpacing) ∈ keys(criticalWfData) && (Inf ∉ abs.(criticalWfData[string(WfSpacing)]["J"]) || (minimum(WfLims) > minimum(criticalWfData[string(WfSpacing)]["lims"]) && maximum(WfLims) < maximum(criticalWfData[string(WfSpacing)]["lims"])))
-            return criticalWfData[string(WfSpacing)]
+            return criticalWfData[string(WfSpacing)]["Jf"], criticalWfData[string(WfSpacing)]["J"]
         end
     end
     if string(WfSpacing) ∉ keys(criticalWfData)
@@ -103,11 +103,6 @@ end
         currentTransitionWindow = collect(WfLims)
         currentPerpFlags = [PerpFlag(size_BZ, merge(couplings, Dict("Wf" => Wf)); perpFlagData=perpFlagData, loadData=loadData) for Wf in currentTransitionWindow]
         currentIndices = perpRatioToIndex.(currentPerpFlags)
-        #=if currentIndices[1] == currentIndices[2]=#
-        #=    for Wf in range(minimum(WfLims), stop=maximum(WfLims), step=WfSpacing)=#
-        #=        perpFlagData[string(Wf)] = currentPerpFlags[1]=#
-        #=    end=#
-        #=end=#
         if minimum(currentIndices) > phaseBoundType[1]
             push!(criticalWf_J, -9e9)
             continue
@@ -171,16 +166,6 @@ function PhaseDiagram(
         phaseDiagram_J[i, crit1 .≥ WfVals] .= 1
         phaseDiagram_J[i, crit1 .< WfVals .< crit2] .= 2
     end
-
-    #=pgFillComplete = @distributed (v1, v2) -> vcat(v1, v2) for i in eachindex(criticalWfResults)=#
-    #=    PGStart, PGStop = criticalWfResults[i]=#
-    #=    pgFill = zeros(length(WfVals[PGStart .≥ WfVals .≥ PGStop]))=#
-    #=    pgFill .= 0.5=#
-    #=    [pgFill]=#
-    #=end=#
-    #=for (i, (PGStart, PGStop)) in enumerate(criticalWfResults)=#
-    #=    phaseDiagram[i, PGStart .≥ WfVals .≥ PGStop] .= pgFillComplete[i]=#
-    #=end=#
 
     return phaseDiagram_Jf, phaseDiagram_J
 end

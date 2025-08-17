@@ -1,4 +1,4 @@
-using Distributed, CSV, CodecZlib, Combinatorics, Serialization, PDFmerger, PyPlot
+using Distributed, Combinatorics, Serialization, PDFmerger, PyPlot, CodecZlib
 using Fermions
 
 @everywhere using FileIO, JSON3, LinearAlgebra, ProgressMeter, JLD2
@@ -12,7 +12,7 @@ include("PltStyle.jl")
 
 global kondo_f = 0.1
 global kondo_perp = 0.0
-global lightBandFactor = 2.
+global lightBandFactor = 5.
 global epsilon_f = 0.5 * HOP_T
 global mu_c = 0.5 * HOP_T
 global Wc = 0.5 * HOP_T
@@ -77,12 +77,14 @@ function PhaseDiagram(
         fillPG::Bool=false,
     )
     @assert minimum(kondo_perpLims) > 0
-    epsilon_f = 0.5 * HOP_T
-    kondo_f_arr = (0.1:0.1:0.2) .* HOP_T
-    Wc_arr = (0.0:-0.2:-0.2) .* HOP_T
+    epsilon_f = 0.0 * HOP_T
+    mu_c = 0.0 * HOP_T
+    lightBandFactor = 2.
+    kondo_f_arr = (0.1:0.1:0.4) .* HOP_T
+    Wc_arr = (0.0:-0.05:-0.2) .* HOP_T
     WfVals = collect(minimum(WfLims):WfSpacing:maximum(WfLims))
     JperpVals = collect(minimum(kondo_perpLims):kondo_perpSpacing:maximum(kondo_perpLims))
-    fig, axes = PyPlot.subplots(nrows=length(kondo_f_arr), ncols=length(Wc_arr), figsize=(12 * length(Wc_arr), 12 * length(kondo_f_arr)))
+    fig, axes = PyPlot.subplots(nrows=length(kondo_f_arr), ncols=length(Wc_arr), figsize=(8 * length(Wc_arr), 6 * length(kondo_f_arr)))
     for (i, kondo_f) in enumerate(kondo_f_arr)
         for (j, Wc) in enumerate(Wc_arr)
             phaseDiagram_Jf, phaseDiagram_J = PhaseDiagram(size_BZ, kondo_perpLims, kondo_perpSpacing, WfLims, WfSpacing, 
@@ -98,9 +100,18 @@ function PhaseDiagram(
                                            ),
                                     cmap = plt.get_cmap(CMAP, 3),
                                    )
-            for flag in [2, 3]
-                pairs = findall(==(flag), phaseDiagram_J)[1:10:end]
-                axes[i,j].scatter([WfVals[p[1]] for p in pairs], [JperpVals[p[2]] for p in pairs], marker=["x","o"][flag - 1], color="white", s=6)
+            for i in 1:length(JperpVals)
+                if i % 10 ≠ 0
+                    phaseDiagram_J[i, :] .= 0
+                    continue
+                end
+                phaseDiagram_J[i,((1:length(WfVals)) .% 10) .≠ 0] .= 0
+            end
+            colors = ["black", "midnightblue", "purple"]
+            markers = ["x", ".", "P"]
+            for flag in [1, 2, 3]
+                pairs = findall(==(flag), phaseDiagram_J)
+                axes[i,j].scatter([WfVals[p[2]] for p in pairs], [JperpVals[p[1]] for p in pairs], marker=markers[flag], color=colors[flag], s=150)
             end
 
             if j == 1
@@ -113,9 +124,9 @@ function PhaseDiagram(
             if i == length(kondo_f_arr)
                 axes[length(kondo_f_arr), j].set_xlabel(L"W_f")
             end
-            if j == length(Wc_arr)
-                fig.colorbar(hmap, ticks=[0, 0.5, 1])
-            end
+            #=if j == length(Wc_arr)=#
+            #=    fig.colorbar(hmap, ticks=[0, 0.5, 1])=#
+            #=end=#
         end
     end
     fig.tight_layout()
@@ -123,7 +134,7 @@ function PhaseDiagram(
 end
 
 
-PhaseDiagram(13, (0.01, 1.0), 0.005, (-0.01, -1.0), 0.005; loadData=false)
+PhaseDiagram(13, (0.01, 1.0), 0.01, (-0.01, -1.0), 0.01; loadData=true)
 
 #=postProcess(data) = reshape(data, (size_BZ, size_BZ)) .|> abs=#
 #==#
