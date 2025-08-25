@@ -43,7 +43,7 @@ end
 function initialiseKondoJ(
         size_BZ::Int64, 
         num_steps::Int64,
-        kondo_f::Float64
+        kondoF::Float64
     )
     # Kondo coupling must be stored in a 3D matrix. Two of the dimensions store the 
     # incoming and outgoing momentum indices, while the third dimension stores the 
@@ -51,7 +51,7 @@ function initialiseKondoJ(
     # for the momentum pair (i,j) at the k^th Rg step.
     kondoJArray = Array{Float64}(undef, size_BZ^2, size_BZ^2, num_steps)
     k1x_vals, k1y_vals = map1DTo2D(collect(1:size_BZ^2), size_BZ)
-    kondoJArray[:, :, 1] .= 0.5 * kondo_f .* (cos.(k1x_vals' .- k1x_vals) .+ cos.(k1y_vals' .- k1y_vals))
+    kondoJArray[:, :, 1] .= 0.5 * kondoF .* (cos.(k1x_vals' .- k1x_vals) .+ cos.(k1y_vals' .- k1y_vals))
     return kondoJArray
 end
 
@@ -196,16 +196,16 @@ end
         loadData::Bool=false,
         saveData::Bool=true,
     )
-    omega_by_t, kondo_f, kondo_perp, Wf = [couplings[k] for k in ["omega_by_t", "kondo_f", "kondo_perp", "Wf"]]
-    Wc, epsilon_f, mu_c, lightBandFactor = [couplings[k] for k in ["Wc", "epsilon_f", "mu_c", "lightBandFactor"]]
+    omega_by_t, kondoF, kondoPerp, Wf = [couplings[k] for k in ["omega_by_t", "kondoF", "kondoPerp", "Wf"]]
+    W, epsilonF, mu_c, lightBandFactor = [couplings[k] for k in ["W", "epsilonF", "mu_c", "lightBandFactor"]]
 
-    #=savePath = joinpath(SAVEDIR, "rgflow-$(size_BZ)-$(omega_by_t)-$(kondo_f)-$(Wf)-$(kondo_perp)-$(Wc)-$(epsilon_f)-$(mu_c).jld2")=#
+    #=savePath = joinpath(SAVEDIR, "rgflow-$(size_BZ)-$(omega_by_t)-$(kondoF)-$(Wf)-$(kondoPerp)-$(Wc)-$(epsilonF)-$(mu_c).jld2")=#
     savePath = joinpath(SAVEDIR, SavePath("rgflow", size_BZ, couplings, "jld2"))
     mkpath(SAVEDIR)
     if isfile(savePath) && loadData
         _, dispersionArray = getDensityOfStates(tightBindDisp, size_BZ)
         kondoJArray = zeros(size_BZ^2, size_BZ^2, 2)
-        kondoJArray[:, :, 1] .= initialiseKondoJ(size_BZ, trunc(Int, (size_BZ + 1) / 2), kondo_f)[:, :, 1]
+        kondoJArray[:, :, 1] .= initialiseKondoJ(size_BZ, trunc(Int, (size_BZ + 1) / 2), kondoF)[:, :, 1]
         loadedData = jldopen(savePath)
         kondoJArray[:, :, 2] = loadedData["kondoRenorm"]
         kondoPerpArray = loadedData["kondoPerpArray"]
@@ -225,10 +225,10 @@ end
     # incoming and outgoing momentum indices, while the third dimension stores the 
     # behaviour along the RG flow. For example, J[i][j][k] reveals the value of J 
     # for the momentum pair (i,j) at the k^th Rg step.
-    kondoJArray = initialiseKondoJ(size_BZ, trunc(Int, (size_BZ + 1) / 2), kondo_f)
+    kondoJArray = initialiseKondoJ(size_BZ, trunc(Int, (size_BZ + 1) / 2), kondoF)
 
     kondoPerpArray = zeros(length(cutOffEnergies))
-    kondoPerpArray[1] = kondo_perp
+    kondoPerpArray[1] = kondoPerp
 
     # define flags to track whether the RG flow for a particular J_{k1, k2} needs to be stopped 
     # (perhaps because it has gone to zero, or its denominator has gone to zero). These flags are
@@ -253,8 +253,8 @@ end
 
         innerIndicesArr, excludedVertexPairs, mixedVertexPairs, cutoffPoints, cutoffHolePoints, proceed_flags = highLowSeparation(dispersionArray, energyCutoff, proceed_flags, size_BZ)
 
-        lightDenominators = [omega_by_t * HOP_T * lightBandFactor - cutOffEnergies[stepIndex] * lightBandFactor / 2 + kondoPerpArray[stepIndex]/4 + Wc /2 + mu_c / 2,
-                            omega_by_t * HOP_T * lightBandFactor - cutOffEnergies[stepIndex] * lightBandFactor / 2 + kondoPerpArray[stepIndex]/4 + Wc /2 - mu_c / 2
+        lightDenominators = [omega_by_t * HOP_T * lightBandFactor - cutOffEnergies[stepIndex] * lightBandFactor / 2 + kondoPerpArray[stepIndex]/4 + W /2 + mu_c / 2,
+                            omega_by_t * HOP_T * lightBandFactor - cutOffEnergies[stepIndex] * lightBandFactor / 2 + kondoPerpArray[stepIndex]/4 + W /2 - mu_c / 2
                            ]
         innerLoopMomenta = [
             point for (point, energy) in enumerate(dispersionArray) if
@@ -290,11 +290,11 @@ end
         end
         filter!(<(0), lightDenominators)
         if !isempty(lightDenominators)
-            kondoPerpArray[stepIndex + 1] -= (kondoPerpArray[stepIndex]^2 + 4 * kondoPerpArray[stepIndex] * Wc) * deltaEnergy * sum(densityOfStates[cutoffPoints]) * 0.5 * sum(1 ./ lightDenominators)
+            kondoPerpArray[stepIndex + 1] -= (kondoPerpArray[stepIndex]^2 + 4 * kondoPerpArray[stepIndex] * W) * deltaEnergy * sum(densityOfStates[cutoffPoints]) * 0.5 * sum(1 ./ lightDenominators)
         end
 
         for q in cutoffPoints
-            heavyDenominator = omega_by_t * HOP_T - cutOffEnergies[stepIndex] / 2 + Wf / 2 + epsilon_f + kondoJArray[q, q, stepIndex] / 4
+            heavyDenominator = omega_by_t * HOP_T - cutOffEnergies[stepIndex] / 2 + Wf / 2 + epsilonF + kondoJArray[q, q, stepIndex] / 4
             if heavyDenominator ≥ 0
                 continue
             end

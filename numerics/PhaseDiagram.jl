@@ -39,12 +39,15 @@ end
 
 @everywhere function CriticalWf(
         size_BZ::Int64,
-        WfLims::NTuple{2, Float64},
-        WfSpacing::Float64,
+        WfRange::NTuple{3, Float64},
         couplings::Dict{String, Float64};
         loadData::Bool=false,
         maxIter::Int64=100,
     )
+    @assert WfRange[1] < WfRange[3] && WfRange[2] > 0
+    WfLims = (WfRange[1], WfRange[3])
+    WfSpacing = WfRange[2]
+
     fracToIndex(f) = ifelse(f == 1, 1, ifelse(f > 0, 2, 3))
     perpRatioToIndex(f) = ifelse(f ≥ 1.2, 3, ifelse(f ≥ 0.5, 2, 1))
 
@@ -62,7 +65,6 @@ end
 
     @assert WfSpacing > 0
     criticalWf_Jf = Float64[]
-    @assert issorted(WfLims, rev=true)
 
     savePathPolefrac = joinpath(SAVEDIR, SavePath("PoleFrac", size_BZ, couplings, "json"))
     poleFracData = Dict{String,Float64}()
@@ -143,21 +145,18 @@ end
 
 function PhaseDiagram(
         size_BZ::Int64,
-        kondo_perpLims::NTuple{2, Float64}, 
-        kondo_perpSpacing::Float64,
-        WfLims::NTuple{2, Float64}, 
-        WfSpacing::Float64,
+        kondoPerpVals::Vector{Float64},
+        WfRange::NTuple{3, Float64},
         couplings::Dict{String, Float64};
         loadData::Bool=false,
         fillPG::Bool=false,
     )
 
     mkpath(SAVEDIR)
-    kondo_perpVals = collect(minimum(kondo_perpLims):kondo_perpSpacing:maximum(kondo_perpLims))
-    WfVals = collect(minimum(WfLims):WfSpacing:maximum(WfLims))
-    phaseDiagram_Jf = fill(0., (length(kondo_perpVals), length(WfVals)))
-    phaseDiagram_J = fill(0., (length(kondo_perpVals), length(WfVals)))
-    criticalWfResults = @showprogress pmap(kondo_perp -> CriticalWf(size_BZ, WfLims, WfSpacing, merge(couplings, Dict("kondo_perp" => kondo_perp)); loadData=loadData), kondo_perpVals)
+    WfVals = FillIn(WfRange)
+    phaseDiagram_Jf = fill(0., (length(kondoPerpVals), length(WfVals)))
+    phaseDiagram_J = fill(0., (length(kondoPerpVals), length(WfVals)))
+    criticalWfResults = @showprogress pmap(kondoPerp -> CriticalWf(size_BZ, WfRange, merge(couplings, Dict("kondoPerp" => kondoPerp)); loadData=loadData), kondoPerpVals)
     for (i, ((PGStart, PGStop), (crit1, crit2))) in enumerate(criticalWfResults)
         phaseDiagram_Jf[i, WfVals .≥ PGStart] .= 1.
         phaseDiagram_Jf[i, PGStop .≥ WfVals] .= 0.

@@ -350,14 +350,35 @@ function SavePath(
         prefix::String,
         size_BZ::Int64,
         couplings::Dict{String, Float64},
-        extension::String,
+        extension::String;
+        maxSize::Int64=0
     )
 
+    if extension[1] ≠ '.'
+        extension = "." * extension
+    end
     path = "$(prefix)-$(size_BZ)"
 
-    coupNames = ["omega_by_t", "kondo_f", "kondo_perp", "Wf", "Wc", "epsilon_d", "mu_c", "lightBandFactor"]
+    coupNames = ["omega_by_t", "kondoF", "kondoPerp", "Wf", "W", "epsilonF", "mu_c", "lightBandFactor"]
     for k in filter(∈(keys(couplings)), coupNames)
         path *= "-$(couplings[k])"
     end
-    return path*".$(extension)"
+    if maxSize > 0
+        path *= "-$(maxSize)"
+    end
+    return path*"$(extension)"
+end
+
+
+function ReflectY(
+        point::Int64,
+        size_BZ::Int64,
+    )
+    kx, ky = map1DTo2D(point, size_BZ)
+    return map2DTo1D(-kx, ky, size_BZ)
+end
+
+
+function FillIn(limits)
+    return collect(limits[1]:limits[2]:limits[3])
 end

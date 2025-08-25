@@ -1,7 +1,7 @@
 ##### Functions for calculating various probes          #####
 ##### (correlation functions, Greens functions, etc)    #####
 
-@everywhere using ProgressMeter, Combinatorics, Serialization, Fermions
+@everywhere using ProgressMeter, Combinatorics, Serialization, Fermions, JSON3
 
 """
 Function to calculate the total Kondo scattering probability Γ(k) = ∑_q J(k,q)^2
@@ -74,78 +74,47 @@ function KondoCoupMap(
 end
 
 
-@everywhere function IterDiagResults(
+@everywhere function IterDiagMomentumSpace(
         hamiltDetails::Dict,
         maxSize::Int64,
-        pivotPoints::Vector{Int64},
-        sortedPoints::Vector{Int64},
-        correlationFuncDict::Dict{String, Tuple{Union{Nothing, Int64}, Function}},
-        vneFuncDict::Dict,
-        mutInfoFuncDict::Dict,
-        bathIntLegs::Int64,
-        noSelfCorr::Vector{String},
-        addPerStep::Int64,
+        startPoint::Int64,
+        momentumPoints::Vector{Int64},
+        correlation::Dict,
+        vne::Dict{String, Function},
+        mutInfo::Dict{String, Function};
+        bathIntLegs::Int64=2,
+        addPerStep::Int64=1,
     )
-    allKeys = vcat(keys(correlationFuncDict)..., keys(vneFuncDict)..., keys(mutInfoFuncDict)...)
+
+    mapper(p) = ifelse(p == 0, 3, ifelse(p > 0, 6 * p - 1, -6 * p + 1))
+    allKeys = vcat(keys(correlation)..., keys(vne)..., keys(mutInfo)...)
     corrResults = Dict{String, Vector{Float64}}(k => repeat([NaN], hamiltDetails["size_BZ"]^2) for k in allKeys)
-
-    pointsSequence = copy(sortedPoints)
-
-    mapCorrNameToIndex = Dict()
-    correlationDefDict = Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}()
-    pivotIndices = findall(∈(pivotPoints), pointsSequence)
-    for (name, (secondMomentum, func)) in correlationFuncDict
-        secondIndex = isnothing(secondMomentum) ? nothing : findfirst(==(secondMomentum), pointsSequence)
-        for pivotIndex in pivotIndices
-            if name ∈ noSelfCorr && secondIndex == pivotIndex
-                continue
-            end
-            correlationDefDict[name * string(pivotIndex)] = func(pivotIndex, secondIndex)
-            mapCorrNameToIndex[name * string(pivotIndex)] = (name, pointsSequence[pivotIndex])
-        end
+    #=@assert startPoint ≤ length(momentumPoints)=#
+    kondoGammaPlus = zeros(length(momentumPoints), length(momentumPoints))
+    kondoGammaMinus = zeros(length(momentumPoints), length(momentumPoints))
+    for (i, point) in enumerate(momentumPoints)
+        kondoGammaPlus[i, :] .= hamiltDetails["kondoJArray"][point, momentumPoints] + hamiltDetails["kondoJArray"][ReflectY(point, hamiltDetails["size_BZ"]), momentumPoints]
+        kondoGammaPlus[:, i] .= kondoGammaPlus[i, :]
+        kondoGammaMinus[i, :] .= hamiltDetails["kondoJArray"][point, momentumPoints] - hamiltDetails["kondoJArray"][ReflectY(point, hamiltDetails["size_BZ"]), momentumPoints]
+        kondoGammaMinus[:, i] .= kondoGammaMinus[i, :]
     end
+    sortPlus = sortperm(abs.(kondoGammaPlus[startPoint, :]), rev=true)
+    sortMinus = sortperm(abs.(kondoGammaMinus[startPoint, :]), rev=true)
+    kondoGammaPlus = kondoGammaPlus[sortPlus, sortPlus]
+    kondoGammaMinus = kondoGammaMinus[sortMinus, sortMinus]
 
-    vneDefDict = Dict{String, Vector{Int64}}()
-    for (name, func) in vneFuncDict
-        for pivotIndex in pivotIndices
-            vneDefDict[name * string(pivotIndex)] = func(pivotIndex)
-            mapCorrNameToIndex[name * string(pivotIndex)] = (name, pointsSequence[pivotIndex])
-        end
-    end
-
-    mutInfoDefDict = Dict{String, NTuple{2, Vector{Int64}}}()
-    for (name, (secondMomentum, func)) in mutInfoFuncDict
-        secondIndex = isnothing(secondMomentum) ? nothing : findfirst(==(secondMomentum), pointsSequence)
-        if !isnothing(secondMomentum) && isnothing(secondIndex)
-            continue
-        end
-        for pivotIndex in pivotIndices
-            partyA, partyB = func(pivotIndex, secondIndex)
-            if partyA ≠ partyB
-                mutInfoDefDict[name * join(pivotIndex)] = (partyA, partyB)
-                mapCorrNameToIndex[name * join(pivotIndex)] = (name, pointsSequence[pivotIndex])
-            end
-        end
-    end
-
-    bathIntFunc = points -> hamiltDetails["bathIntForm"](hamiltDetails["W_val"], 
-                                                         hamiltDetails["orbitals"][2],
-                                                         hamiltDetails["size_BZ"],
-                                                         points)
-    if "chemPot" in keys(hamiltDetails)
-        hamiltDetails["dispersion"][pointsSequence] .+= hamiltDetails["chemPot"]
-    end    
-    hamiltonian = KondoModel(
-                             hamiltDetails["dispersion"][pointsSequence],
-                             hamiltDetails["kondoJArray"][pointsSequence, pointsSequence],
-                             pointsSequence,
-                             bathIntFunc;
-                             bathIntLegs=bathIntLegs,
-                             globalField=hamiltDetails["globalField"],
-                             couplingTolerance=1e-10,
+    hamiltonian = BilayerKondo(
+                               kondoGammaPlus,
+                               kondoGammaMinus,
+                               hamiltDetails["kondoPerp"],
+                               hamiltDetails["lightBandFactor"] * HOP_T;
+                               epsilonF = hamiltDetails["epsilonF"],
+                               cbathChemPot = hamiltDetails["mu_c"],
+                               globalField=1e-9,
+                               couplingTolerance=1e-10,
                             )
-    indexPartitions = [2 + 2 * length(pivotPoints)]
-    while indexPartitions[end] < 2 + 2 * length(pointsSequence)
+    indexPartitions = [2]
+    while indexPartitions[end] < 2 + 6 * size(kondoGammaPlus)[1]
         push!(indexPartitions, indexPartitions[end] + 2 * addPerStep)
     end
     hamiltonianFamily = MinceHamiltonian(hamiltonian, indexPartitions)
@@ -154,47 +123,67 @@ end
         @assert all(!isempty, hamiltonian)
     end
 
-    iterDiagResults = nothing
-    id = nothing
-    while true
-        output = IterDiag(
-                          hamiltonianFamily, 
-                          maxSize;
-                          symmetries=Char['N', 'S'],
-                          #=magzReq=(m, N) -> -1 ≤ m ≤ 2,=#
-                          occReq=(x, N) -> div(N, 2) - 3 ≤ x ≤ div(N, 2) + 3,
-                          correlationDefDict=correlationDefDict,
-                          vneDefDict=vneDefDict,
-                          mutInfoDefDict=mutInfoDefDict,
-                          silent=true,
-                          maxMaxSize=maxSize,
-                         )
-        exitCode = 0
-        if length(output) == 2
-            savePaths, iterDiagResults = output
-        else
-            savePaths, iterDiagResults, exitCode = output
-        end
-                          
+    corrOps = Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}()
+    corrNames = Dict{String, Vector{String}}()
+    for (name, (pivotName, func)) in correlation
 
-        if exitCode > 0
-            id = rand()
-            println("Error code $(exitCode). Retry id=$(id).")
-        else
-            if !isnothing(id)
-                println("Passed $(id).")
-            end
-            break
-        end
+        #=pivot = nothing=#
+        #=pivotPlus = nothing=#
+        #=pivotMinus = nothing=#
+        #=if pivotName ∈ "NA"=#
+        #=    if pivotName == 'N'=#
+        #=        pivot = map2DTo1D(π/2, π/2, hamiltDetails["size_BZ"])=#
+        #=    else pivotName == 'A'=#
+        #=        pivot = map2DTo1D(π/1, 0., hamiltDetails["size_BZ"])=#
+        #=    end=#
+        #==#
+        #=    # γ-operator indices=#
+        #=    pivotPlus = findfirst(==(pivot), momentumPoints[sortPlus])=#
+        #=    pivotMinus = -findfirst(==(pivot), momentumPoints[sortMinus])=#
+        #=elseif pivotName == 'Z'=#
+        #=    pivot = 0=#
+        #=    pivotPlus = 0=#
+        #=    pivotMinus = 0=#
+        #=else=#
+        #=    @assert false "pivot of $(name) is not among 'N', 'A' or 'Z'"=#
+        #=end=#
+
+        corrNames[name] = String[]
+        indexPlus = findfirst(==(startPoint), sortPlus)
+        pivotPlus = indexPlus
+        indexMinus = -findfirst(==(startPoint), sortMinus)
+        pivotMinus = indexMinus
+        pivot = startPoint
+        corrName = name*"-"*string(pivot)*"-"*string(startPoint) 
+        corrOps[corrName] = func(mapper.([pivotPlus, indexPlus])...) # (k+),(q+)
+        append!(corrOps[corrName], func(mapper.([pivotPlus, indexMinus])...)) # (k+, q-)
+        append!(corrOps[corrName], func(mapper.([pivotMinus, indexPlus])...)) # (k-, q+)
+        append!(corrOps[corrName], func(mapper.([pivotPlus, indexMinus])...)) # (k-,q-)
+        push!(corrNames[name], corrName)
+
+        corrName = name*"-0-0" 
+        corrOps[corrName] = func(mapper.([0, 0])...) # (k+, 0)
+        push!(corrNames[name], corrName)
     end
 
-    for (k, v) in iterDiagResults
-        if k ∉ keys(mapCorrNameToIndex)
-            continue
-        end
-        name, k_ind = mapCorrNameToIndex[k]
-        if name ∈ allKeys
-            corrResults[name][k_ind] = ifelse(abs(v[end]) < 1e-10, 0, v[end])
+    results = IterDiag(
+                      hamiltonianFamily, 
+                      maxSize;
+                      symmetries=Char['N', 'S'],
+                      #=magzReq=(m, N) -> -1 ≤ m ≤ 2,=#
+                      #=occReq=(x, N) -> div(N, 2) - 3 ≤ x ≤ div(N, 2) + 3,=#
+                      correlationDefDict=corrOps,
+                      #=vneDefDict=vneDict,=#
+                      #=mutInfoDefDict=mutInfoDict,=#
+                      silent=true,
+                      maxMaxSize=maxSize,
+                     )
+    @assert results["exitCode"] == 0
+
+    corrResults = Dict{String, Float64}()
+    for name in keys(correlation)
+        for k in corrNames[name]
+            corrResults[k] = round.(results[k], digits=10)
         end
     end
     return corrResults
@@ -386,131 +375,68 @@ end
 
 end
 
-@everywhere function AuxiliaryCorrelations(
-        hamiltDetails::Dict,
-        numShells::Int64,
-        correlationFuncDict::Dict{String, Tuple{Union{Nothing, Int64}, Function}},
+@everywhere function AuxiliaryMomentumCorrelations(
+        size_BZ::Int64,
+        couplings::Dict{String, Float64},
+        correlation::Dict,
         maxSize::Int64;
-        savePath::Union{Nothing, Function}=nothing,
-        vneFuncDict::Dict=Dict(),
-        mutInfoFuncDict::Dict=Dict(),
+        vne::Dict{String, Function}=Dict{String, Function}(),
+        mutInfo::Dict{String, Function}=Dict{String, Function}(),
         bathIntLegs::Int64=2,
-        noSelfCorr::Vector{String}=String[],
         addPerStep::Int64=1,
-        numProcs::Int64=nprocs(),
         loadData::Bool=false,
-        sortByDistance::Bool=false,
-        calculateFor::Vector{Int64}=Int64[],
+        silent::Bool=false,
     )
 
-    size_BZ = hamiltDetails["size_BZ"]
-
-    cutoffEnergy = hamiltDetails["dispersion"][div(size_BZ - 1, 2) + 2 - numShells]
-
-    # pick out k-states from the southwest quadrant that have positive energies 
-    # (hole states can be reconstructed from them (p-h symmetry))
-    SWIndices = [p for p in 1:size_BZ^2 if
-                 map1DTo2D(p, size_BZ)[1] ≤ 0 &&
-                 map1DTo2D(p, size_BZ)[2] ≤ 0 &&
-                 #=map1DTo2D(p, size_BZ)[1] < -map1DTo2D(p, size_BZ)[2] &&=#
-                 abs(cutoffEnergy) ≥ abs(hamiltDetails["dispersion"][p])
-                ]
-
-    calculatePoints = filter(p -> map1DTo2D(p, size_BZ)[1] ≤ map1DTo2D(p, size_BZ)[2], SWIndices)
-    if !isempty(calculateFor)
-        filter!(∈(calculateFor), calculatePoints)
+    savePath = joinpath(SAVEDIR, SavePath("mom-corr-", size_BZ, couplings, ".json"; maxSize=maxSize))
+    if isfile(savePath) && loadData
+        allCorrelationKeys = vcat(([correlation, vne, mutInfo] .|> keys .|> collect)...)
+        results = JSON3.read(read(savePath, String), Dict{String, Float64})
+        return results
     end
 
-    oppositePoints = Dict{Int64, Vector{Int64}}()
-    for point in calculatePoints
-        reflectDiagonal = map2DTo1D(reverse(map1DTo2D(point, size_BZ))..., size_BZ)
-        reflectFS = map2DTo1D((-1 .* reverse(map1DTo2D(point, size_BZ)) .+ [-π, -π])..., size_BZ)
-        reflectBoth = map2DTo1D((-1 .* map1DTo2D(point, size_BZ) .+ [-π, -π])..., size_BZ)
-        oppositePoints[point] = [reflectDiagonal, reflectFS, reflectBoth]
-    end
+    kondoJArray, kondoPerpArray, dispersion = momentumSpaceRG(size_BZ, couplings; loadData=loadData)
+    averageKondoScale = sum(abs.(kondoJArray[:, :, 1])) / length(kondoJArray[:, :, 1])
+    @assert averageKondoScale > RG_RELEVANCE_TOL
+    kondoJArray[:, :, end] .= ifelse.(abs.(kondoJArray[:, :, end]) ./ averageKondoScale .> RG_RELEVANCE_TOL, kondoJArray[:, :, end], 0)
 
-    if !isnothing(savePath) && loadData
-        corrResults = Dict{String, Vector{Float64}}()
-        allCorrelationKeys = vcat(([correlationFuncDict, vneFuncDict, mutInfoFuncDict] .|> keys .|> collect)...)
-        for corrName in allCorrelationKeys
-            savePathCorr = savePath(corrName)
-            if isfile(savePathCorr)
-                corrResults[corrName] = load(savePathCorr)[corrName]
-            end
-        end
-        if length(corrResults) == length(allCorrelationKeys)
-            corrResultsBool = Dict()
-            for (name, results) in corrResults
-                corrResultsBool[name] = [ifelse(isnan(r), r, abs(r) ≤ 1e-6 ? -1 : 1) for r in results]
-            end
-            println("Collected from saved data.")
-            return corrResults, corrResultsBool
-        end
-    end
+    hamiltDetails = Dict()
+    hamiltDetails["kondoJArray"] = kondoJArray[:, :, end]
+    hamiltDetails["kondoPerp"] = kondoPerpArray[end]
+    hamiltDetails["dispersion"] = dispersion
+    hamiltDetails["size_BZ"] = size_BZ
+    merge!(hamiltDetails, couplings)
 
-    node = map2DTo1D(-π/2, -π/2, size_BZ)
-    antinode = map2DTo1D(-π, 0., size_BZ)
-    distancesFromNode = [hamiltDetails["kondoJArray"][p, node] |> abs for p in SWIndices]
-    symmetricPairsNode = Dict() 
-    symmetricPairsAntiNode = Dict() 
-    symmetricPairsSelf = Dict() 
-    connectedPoints = filter(p -> hamiltDetails["kondoJArray"][p, SWIndices] .|> abs |> maximum > 0, SWIndices)
+    northEastFermiPoints = filter(p -> all(map1DTo2D(p, hamiltDetails["size_BZ"]) .≥ 0), getIsoEngCont(hamiltDetails["dispersion"], 0.0))
+    @assert issorted(northEastFermiPoints)
 
-    for pivot in calculatePoints
-        for (dict, refpoint) in zip([symmetricPairsNode, symmetricPairsAntiNode, symmetricPairsSelf], [node, antinode, pivot])
-            if sortByDistance
-                distancesFromRef = [MinimalDistance(p, pivot, size_BZ) for p in SWIndices if p ≠ pivot]
-            else
-                distancesFromRef = [hamiltDetails["kondoJArray"][p, refpoint] |> abs for p in SWIndices if p ≠ pivot]
-            end
-            dict[pivot] = [[pivot]; filter(≠(pivot), SWIndices)[sortperm(distancesFromRef, rev=true)]]
-            if hamiltDetails["W_val"] == 0
-                filter!(p -> p ∈ connectedPoints, dict[pivot])
-                if length(dict[pivot]) < 2
-                    dict[pivot] = [pivot, filter(≠(pivot), SWIndices)[sortperm(distancesFromRef, rev=true)][1]]
-                end
-            end
-        end
-    end
-
-    desc = "W=$(round(hamiltDetails["W_val"], digits=3))"
-    corrResults = Dict{String, Vector{Float64}}()
-    for dict in [symmetricPairsNode, symmetricPairsAntiNode, symmetricPairsSelf]
-        corr = @showprogress pmap(pivot -> IterDiagResults(hamiltDetails, maxSize, [pivot], dict[pivot], 
-                                                                    correlationFuncDict, vneFuncDict, mutInfoFuncDict, 
-                                                                    bathIntLegs, noSelfCorr, addPerStep),
-                                      WorkerPool(1:numProcs), calculatePoints)
-
-        mergewith!((V1, V2) -> [(isnan(v1) && isnan(v2)) ? NaN : ((isnan(v1) || isnan(v2)) ? filter(!isnan, [v1, v2])[1] : (v1 + v2))
-                                             for (v1, v2) in zip(V1, V2)], 
-                                corrResults, corr..., 
-                               )
-    end
-    map!(v -> v ./ 3, values(corrResults))
-    for (name, val) in corrResults
-        for index in SWIndices
-            if isnan(corrResults[name][index])
-                corrResults[name][index] = 0
-            end
-        end
-    end
-
-    corrResults = PropagateIndices(calculatePoints, corrResults, size_BZ, oppositePoints)
+    resultsArr = @showprogress enabled=!silent pmap(
+                                        startPoint -> IterDiagMomentumSpace(
+                                                              hamiltDetails, 
+                                                              maxSize, 
+                                                              startPoint,
+                                                              northEastFermiPoints,
+                                                              correlation,
+                                                              vne, 
+                                                              mutInfo;
+                                                              bathIntLegs=bathIntLegs, 
+                                                              addPerStep=addPerStep,
+                                                             ),
+                                        eachindex(northEastFermiPoints)
+                                       )
+    results = mergewith(+, resultsArr...)
 
     if !isnothing(savePath)
         mkpath(SAVEDIR)
-        for (corrName, corrValue) in corrResults
-            jldopen(savePath(corrName), "w"; compress = true) do file
-                file[corrName] = corrValue
-            end
-        end
+        open(savePath, "w") do file JSON3.write(file, results) end
     end
+    return results
 
-    corrResultsBool = Dict()
-    for (name, results) in corrResults
-        corrResultsBool[name] = [ifelse(isnan(r), r, abs(r) ≤ 1e-6 ? -1 : 1) for r in results]
-    end
-    return corrResults, corrResultsBool
+    #=corrResultsBool = Dict()=#
+    #=for (name, results) in corrResults=#
+    #=    corrResultsBool[name] = [ifelse(isnan(r), r, abs(r) ≤ 1e-6 ? -1 : 1) for r in results]=#
+    #=end=#
+    #=return corrResults, corrResultsBool=#
 end
 
 

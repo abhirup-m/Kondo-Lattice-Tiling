@@ -1,4 +1,4 @@
-const CMAP = "tab20c"
+CMAP = "coolwarm"
 rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
 PyPlot.plt.style.use("ggplot")
 PyPlot.matplotlib.use("pdf")
