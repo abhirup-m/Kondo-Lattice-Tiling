@@ -24,7 +24,7 @@ onecolumn,
 \end{aligned}\end{equation}
 \begin{equation}\begin{aligned}
 	H^{(0)} =& -t_f\sum_{\braket{i,j},\sigma}\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right) - \mu_c\sum_{i,\sigma}c^\dagger_{i,\sigma}c_{i,\sigma}~,\\
-	H_f({\bf r}_d) =& V_f\sum_{Z \in \text{NN}}\sum_{\sigma}\left(f^\dagger_{{\bf r}_d,\sigma} f_{Z,\sigma} + \text{h.c.}\right) -\mu_f \sum_\sigma f^\dagger_{{\bf r}_d,\sigma}f_{{\bf r}_d,\sigma} - \frac{U_f}{2}\left(f^\dagger_{{\bf r}_d,\uparrow}f_{{\bf r}_d,\uparrow} - f^\dagger_{{\bf r}_d,\downarrow}f_{{\bf r}_d,\downarrow}\right)^2 \\
+	H_f({\bf r}_d) =& V_f\sum_{Z \in \text{NN}}\sum_{\sigma}\left(f^\dagger_{{\bf r}_d,\sigma} f_{Z,\sigma} + \text{h.c.}\right) + \epsilon_f \sum_\sigma f^\dagger_{{\bf r}_d,\sigma}f_{{\bf r}_d,\sigma} + U_f f^\dagger_{{\bf r}_d,\uparrow}f_{{\bf r}_d,\uparrow} f^\dagger_{{\bf r}_d,\downarrow}f_{{\bf r}_d,\downarrow} \\
 				   &+ J_f\sum_{Z \in \text{NN}}\sum_{\alpha,\beta}{\bf S}_f({\bf r}_d) \cdot {\boldsymbol{\sigma}}_{\alpha\beta}f^\dagger_{Z,\alpha}f_{Z,\beta} - \frac{W_f}{2} \sum_{Z \in \text{NN}}\left(f^\dagger_{Z,\uparrow}f_{Z,\uparrow} - f^\dagger_{Z,\downarrow}f_{Z,\downarrow} \right)^2~,\\
 	H_c({\bf r}_d) =& - \frac{W}{2}\left(c^\dagger_{{\bf r}_d,\uparrow}c_{{\bf r}_d,\uparrow} - c^\dagger_{{\bf r}_d,\downarrow}c_{{\bf r}_d,\downarrow} \right)^2~,\\
 	H_{fc}({\bf r}_d) =& J\sum_{\alpha,\beta}{\bf S}_f({\bf r}_d) \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{{\bf r}_d,\alpha}c_{{\bf r}_d,\beta} + V \left(f^\dagger_{{\bf r}_d,\sigma} c_{{\bf r}_d,\sigma} + \text{h.c.}\right)~,\\
@@ -50,7 +50,7 @@ Off-diagonal terms:
 \end{aligned}\end{equation}
 where \({\bf \bar q} = {\boldsymbol \pi} + {\bf q}\) is the charge conjugate partner of \({\bf q}\), and the propagators \(G_f\) and \(G\) are defined as
 \begin{equation}\begin{aligned}\label{propagators}
-	G_f(\omega,{\bf q}) &= \left(\omega - \frac{1}{2}|\varepsilon_f({\bf q})| + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + W_f({\bf q})/2 + \mu_f\right)^{-1} ~,\\
+	G_f(\omega,{\bf q}) &= \left(\omega - \frac{1}{2}|\varepsilon_f({\bf q})| + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + W_f({\bf q})/2 - \epsilon_f\right)^{-1} ~,\\
 	G(\omega,{\bf q}) &= \frac{1}{2}\left[\left(\omega - \frac{1}{2}|\varepsilon({\bf q})| + J^{(j)}/4 + W/2 + \mu/2\right)^{-1} + \left(\omega - \frac{1}{2}|\varepsilon({\bf q})| + J^{(j)}/4 + W/2 - \mu/2\right)^{-1}\right] ~.
 \end{aligned}\end{equation}
 
@@ -62,7 +62,7 @@ Processes that start from configurations in which \({\bf q}\) is occupied:
 \end{aligned}\end{equation}
 where the propagator \(G_f(\omega, {\bf q}, {\bf k})\) for the excitations is a generalisation of eq.~\ref{propagators}:
 \begin{equation}\begin{aligned}
-	G_f(\omega, {\bf q}, {\bf k}) &= \left(\omega - \frac{1}{2}|\varepsilon_f({\bf q})| - \frac{1}{2}|\varepsilon_f({\bf k})| + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + J^{(j)}_f\left({\bf k},{\bf k}\right)/4 + W_f({\bf q})/2 + W_f({\bf k})/2 + \mu_f\right)^{-1} ~,\\
+	G_f(\omega, {\bf q}, {\bf k}) &= \left(\omega - \frac{1}{2}|\varepsilon_f({\bf q})| - \frac{1}{2}|\varepsilon_f({\bf k})| + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + J^{(j)}_f\left({\bf k},{\bf k}\right)/4 + W_f({\bf q})/2 + W_f({\bf k})/2 - \epsilon_f\right)^{-1} ~,\\
 \end{aligned}\end{equation}
 
 Using \(S^\sigma S^z = -\frac{\sigma}{2}S^\sigma\) and \(S^\sigma S^{-\sigma} = \frac{1}{2} + \sigma S^z\), we get
