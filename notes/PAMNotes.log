@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2026/dev/Arch Linux) (preloaded format=xelatex 2025.3.24)  12 AUG 2025 21:23
+This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2026/dev/Arch Linux) (preloaded format=xelatex 2025.3.24)  1 SEP 2025 16:34
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -412,12 +412,12 @@ LaTeX Font Info:    Trying to load font information for U+msb on input line 22.
  (/usr/share/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 ) [1]
-Underfull \hbox (badness 10000) in paragraph at lines 98--100
+Underfull \hbox (badness 10000) in paragraph at lines 106--108
 
  []
 
 [2]
-Underfull \hbox (badness 10000) in paragraph at lines 106--108
+Underfull \hbox (badness 10000) in paragraph at lines 114--116
 
  []
 
@@ -427,15 +427,15 @@ LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
 Package rerunfilecheck Info: File `PAMNotes.out' has not changed.
-(rerunfilecheck)             Checksum: 0E8D322FBF53EBE32E978CB8D2CE6085;1910.
+(rerunfilecheck)             Checksum: 1773A127B8CC916D6FB58D9F2F4B6D1D;2175.
  ) 
 Here is how much of TeX's memory you used:
- 11808 strings out of 475848
- 174510 string characters out of 5776013
- 617461 words of memory out of 5000000
- 34603 multiletter control sequences out of 15000+600000
+ 11810 strings out of 475848
+ 174528 string characters out of 5776013
+ 618789 words of memory out of 5000000
+ 34605 multiletter control sequences out of 15000+600000
  563717 words of font info for 62 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
  72i,14n,79p,867b,388s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on PAMNotes.xdv (4 pages, 71880 bytes).
+Output written on PAMNotes.xdv (4 pages, 84468 bytes).

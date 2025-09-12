@@ -23,8 +23,8 @@ onecolumn,
 	H_\text{aux}({\bf r}_d) = H^{(0)} + H_f({\bf r}_d) + H_c({\bf r}_d) + H_{fc}({\bf r}_d)~,
 \end{aligned}\end{equation}
 \begin{equation}\begin{aligned}
-	H^{(0)} =& -t_f\sum_{\braket{i,j},\sigma}\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right)~,\\
-	H_f({\bf r}_d) =& V_f\sum_{Z \in \text{NN}}\sum_{\sigma}\left(f^\dagger_{{\bf r}_d,\sigma} f_{Z,\sigma} + \text{h.c.}\right) - \frac{U_f}{2}\left(f^\dagger_{{\bf r}_d,\uparrow}f_{{\bf r}_d,\uparrow} - f^\dagger_{{\bf r}_d,\downarrow}f_{{\bf r}_d,\downarrow}\right)^2 \\
+	H^{(0)} =& -t_f\sum_{\braket{i,j},\sigma}\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right) - \mu_c\sum_{i,\sigma}c^\dagger_{i,\sigma}c_{i,\sigma}~,\\
+	H_f({\bf r}_d) =& V_f\sum_{Z \in \text{NN}}\sum_{\sigma}\left(f^\dagger_{{\bf r}_d,\sigma} f_{Z,\sigma} + \text{h.c.}\right) -\mu_f \sum_\sigma f^\dagger_{{\bf r}_d,\sigma}f_{{\bf r}_d,\sigma} - \frac{U_f}{2}\left(f^\dagger_{{\bf r}_d,\uparrow}f_{{\bf r}_d,\uparrow} - f^\dagger_{{\bf r}_d,\downarrow}f_{{\bf r}_d,\downarrow}\right)^2 \\
 				   &+ J_f\sum_{Z \in \text{NN}}\sum_{\alpha,\beta}{\bf S}_f({\bf r}_d) \cdot {\boldsymbol{\sigma}}_{\alpha\beta}f^\dagger_{Z,\alpha}f_{Z,\beta} - \frac{W_f}{2} \sum_{Z \in \text{NN}}\left(f^\dagger_{Z,\uparrow}f_{Z,\uparrow} - f^\dagger_{Z,\downarrow}f_{Z,\downarrow} \right)^2~,\\
 	H_c({\bf r}_d) =& - \frac{W}{2}\left(c^\dagger_{{\bf r}_d,\uparrow}c_{{\bf r}_d,\uparrow} - c^\dagger_{{\bf r}_d,\downarrow}c_{{\bf r}_d,\downarrow} \right)^2~,\\
 	H_{fc}({\bf r}_d) =& J\sum_{\alpha,\beta}{\bf S}_f({\bf r}_d) \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{{\bf r}_d,\alpha}c_{{\bf r}_d,\beta} + V \left(f^\dagger_{{\bf r}_d,\sigma} c_{{\bf r}_d,\sigma} + \text{h.c.}\right)~,\\
@@ -58,36 +58,44 @@ where \({\bf \bar q} = {\boldsymbol \pi} + {\bf q}\) is the charge conjugate par
 \subsection{Inter-layer processes}
 Processes that start from configurations in which \({\bf q}\) is occupied:
 \begin{equation}\begin{aligned}
-	P_1 = \frac{1}{8}\sum_{{\bf q},{\bf k},{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} J_f^{(j)}({\bf q},{\bf k}) S_f^\sigma f^\dagger_{{\bf q},-\sigma}f_{{\bf k},\sigma} ~ G_f(\omega, {\bf q}) ~ J^{(j)} S_f^z \sigma^\prime c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~ G_f(\omega, {\bf q}) ~ J_f^{(j)}({\bf q},{\bf k}) S_f^{-\sigma} f^\dagger_{{\bf k},\sigma}f_{{\bf q},-\sigma}~,
+	P_1 = \frac{1}{8}\sum_{{\bf q},{\bf k},{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} J_f^{(j)}({\bf q},{\bf k}) S_f^\sigma f^\dagger_{{\bf q},-\sigma}f_{{\bf k},\sigma} ~ G_f(\omega, {\bf q}, {\bf k}) ~ J^{(j)} S_f^z \sigma^\prime c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~ G_f(\omega, {\bf q}, {\bf k}) ~ J_f^{(j)}({\bf q},{\bf k}) S_f^{-\sigma} f^\dagger_{{\bf k},\sigma}f_{{\bf q},-\sigma}~,
 \end{aligned}\end{equation}
-where the propagator \(G_f(\omega)\) for the excitations is defined in eq.~\ref{propagators}:
+where the propagator \(G_f(\omega, {\bf q}, {\bf k})\) for the excitations is a generalisation of eq.~\ref{propagators}:
+\begin{equation}\begin{aligned}
+	G_f(\omega, {\bf q}, {\bf k}) &= \left(\omega - \frac{1}{2}|\varepsilon_f({\bf q})| - \frac{1}{2}|\varepsilon_f({\bf k})| + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + J^{(j)}_f\left({\bf k},{\bf k}\right)/4 + W_f({\bf q})/2 + W_f({\bf k})/2 + \mu_f\right)^{-1} ~,\\
+\end{aligned}\end{equation}
+
 Using \(S^\sigma S^z = -\frac{\sigma}{2}S^\sigma\) and \(S^\sigma S^{-\sigma} = \frac{1}{2} + \sigma S^z\), we get
 \begin{equation}\begin{aligned}
-	P_1 &= \sum_{{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} \frac{-\sigma^\prime}{16} \left(\frac{\sigma}{2} + S_f^z\right) c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~  J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2 G_f^2(\omega, {\bf q})\\
-		&= -\frac{1}{8}\sum_{{\bf k}_1, {\bf k}_2,\sigma^\prime} \sigma^\prime~S_f^z c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~  J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2 G^2_f(\omega, {\bf q})~.
+	P_1 &= \sum_{{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} \frac{-\sigma^\prime}{16} \left(\frac{\sigma}{2} + S_f^z\right) c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~  J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2 G^2_f(\omega, {\bf q}, {\bf k})\\
+		&= -\frac{1}{8}\sum_{{\bf k}_1, {\bf k}_2,\sigma^\prime} \sigma^\prime~S_f^z c^\dagger_{{\bf k}_1,\sigma^\prime}c_{{\bf k}_2,\sigma^\prime} ~  J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2 G^2_f(\omega, {\bf q}, {\bf k})~.
 \end{aligned}\end{equation}
 
 Another process can be conceived with similar starting configuration but where the loop momenta are on the \(c-\)plane:
 \begin{equation}\begin{aligned}
-	P_2 = \frac{1}{8}\sum_{{\bf q},{\bf k},{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} J^{(j)} S_f^\sigma c^\dagger_{{\bf q},-\sigma}c_{{\bf k},\sigma} ~ G(\omega, {\bf q}) ~ J^{(j)}({\bf k}_1,{\bf k}_2) S_f^z \sigma^\prime f^\dagger_{{\bf k}_1,\sigma^\prime}f_{{\bf k}_2,\sigma^\prime} ~ G(\omega, {\bf q}) ~ J^{(j)} S_f^{-\sigma} c^\dagger_{{\bf k},\sigma}c_{{\bf q},-\sigma}~,
+	P_2 = \frac{1}{8}\sum_{{\bf q},{\bf k},{\bf k}_1, {\bf k}_2,\sigma,\sigma^\prime} J^{(j)} S_f^\sigma c^\dagger_{{\bf q},-\sigma}c_{{\bf k},\sigma} ~ \tilde \tilde G(\omega, {\bf q}, {\bf k}) ~ J^{(j)}({\bf k}_1,{\bf k}_2) S_f^z \sigma^\prime f^\dagger_{{\bf k}_1,\sigma^\prime}f_{{\bf k}_2,\sigma^\prime} ~ \tilde G(\omega, {\bf q}, {\bf k}) ~ J^{(j)} S_f^{-\sigma} c^\dagger_{{\bf k},\sigma}c_{{\bf q},-\sigma}~,
 \end{aligned}\end{equation}
-with the propagator defined in eq.~\ref{propagators}.
+where \(\tilde G(\omega,{\bf q}, {\bf k})\) is defined as
+\begin{equation}\begin{aligned}
+	\tilde G(\omega,{\bf q}, {\bf k}) &= \frac{1}{\omega - \frac{1}{2}|\varepsilon({\bf q})| - \frac{1}{2}|\varepsilon({\bf k})| + J^{(j)}/2 + W}~.
+\end{aligned}\end{equation}
+
 
 Using the same properties as above, the expression simplifies to:
 \begin{equation}\begin{aligned}
-	P_2 &= -\frac{1}{8}\sum_{{\bf k}_1, {\bf k}_2,\sigma^\prime} \sigma^\prime~S_f^z f^\dagger_{{\bf k}_1,\sigma^\prime}f_{{\bf k}_2,\sigma^\prime} ~  J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf q} \in \text{HS} ,{\bf k} \in \text{PS}}G^2(\omega, {\bf q})~.
+	P_2 &= -\frac{1}{8}\sum_{{\bf k}_1, {\bf k}_2,\sigma^\prime} \sigma^\prime~S_f^z f^\dagger_{{\bf k}_1,\sigma^\prime}f_{{\bf k}_2,\sigma^\prime} ~  J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf q} \in \text{HS} ,{\bf k} \in \text{PS}}\tilde G^2(\omega,{\bf q}, {\bf k})~.
 \end{aligned}\end{equation}
 
 It turns out that the processes that start from unoccupied configurations in the state \({\bf q}\) give almost identical contributions as the present expressions, the only difference being that \({\bf q}\) is now summed over the hole sector (HS) while \({\bf k}\) is summed over the particle sector (PS). For a particle-hole symmetric system (which we have restricted ourselves to), these two summations are equal, so both the contributions are indeed identical. The total renormalisation can therefore be read off from the final expressions of \(P_1\) and \(P_2\) (and the hole sector is accounted for by doubling the renormalisation from just the particle sector):
 \begin{equation}\begin{aligned}
-	\Delta J_f^{(j)}({\bf k}_1,{\bf k}_2) = -\frac{1}{2}J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}G^2(\omega, {\bf q})\\
-	\Delta J^{(j)} = -\frac{1}{2}J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2G^2_f(\omega, {\bf q})\\
+	\Delta J_f^{(j)}({\bf k}_1,{\bf k}_2) = -\frac{1}{2}J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\tilde G^2(\omega, {\bf q}, {\bf k})\\
+	\Delta J^{(j)} = -\frac{1}{2}J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k}) G_f(\omega, {\bf q}, {\bf k})\right)^2\\
 \end{aligned}\end{equation}
 
 \subsection{Complete coupling RG equation}
 \begin{equation}\begin{aligned}\label{rgEquation}
-	\Delta J_f^{(j)}\left({\bf k}_1, {\bf k}_2\right) &= -\sum_{{\bf q} \in \text{PS}} \left[\left(J_f^{(j)}\left({\bf k}_2,{\bf q}\right) J_f^{(j)}\left({\bf q},{\bf k}_1\right) + 4J_f^{(j)}\left({\bf q}, {\bf \bar q}\right) W_{{\bf \bar q}, {\bf k}_2, {\bf k}_1, {\bf q}}\right) G_f(\omega, {\bf q}) + \frac{1}{2}J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf k} \in \text{HS}}G^2(\omega, {\bf q})\right]~,\\
-	\Delta J^{(j)} &= - \rho(\varepsilon_j)\Delta \varepsilon\cdot\left[\left(J^{(j)}\right)^2 + 4WJ^{(j)}\right] G(\omega, {\bf q}) -\frac{1}{2}J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})\right)^2G^2_f(\omega, {\bf q})~,
+	\Delta J_f^{(j)}\left({\bf k}_1, {\bf k}_2\right) &= -\sum_{{\bf q} \in \text{PS}} \left[\left(J_f^{(j)}\left({\bf k}_2,{\bf q}\right) J_f^{(j)}\left({\bf q},{\bf k}_1\right) + 4J_f^{(j)}\left({\bf q}, {\bf \bar q}\right) W_{{\bf \bar q}, {\bf k}_2, {\bf k}_1, {\bf q}}\right) G_f(\omega, {\bf q}) + \frac{1}{2}J_f^{(j)}({\bf k}_1,{\bf k}_2) \left(J^{(j)}\right)^2 \sum_{{\bf k} \in \text{HS}}\tilde G^2(\omega, {\bf q}, {\bf k})\right]~,\\
+	\Delta J^{(j)} &= - \rho(\varepsilon_j)\Delta \varepsilon\cdot\left[\left(J^{(j)}\right)^2 + 4WJ^{(j)}\right] G(\omega, {\bf q}) -\frac{1}{2}J^{(j)} \sum_{{\bf q} \in \text{PS} ,{\bf k} \in \text{HS}}\left(J_f^{(j)}({\bf q},{\bf k})G_f(\omega, {\bf q}, {\bf k})\right)^2~,
 \end{aligned}\end{equation}
 
 \subsection{Symmetries preserved under renormalisation}
@@ -132,11 +140,11 @@ We will now obtain a more minimal representation of this interaction. Each momen
 	&= \sum_{\bf q}\left[\sum_{{\bf k} \in \mathcal{Q}_1} J_f^*({\bf k},{\bf q}) \left(f^\dagger_{{\bf k},\alpha} - f^\dagger_{{\bf k - Q_1},\alpha}\right) + \sum_{{\bf k} \in \mathcal{Q}_2} J_f^*({\bf k},{\bf q}) \left(f^\dagger_{{\bf k},\alpha} - f^\dagger_{{\bf k + Q_2},\alpha}\right) \right] f_{{\bf q},\beta}~.
 \end{aligned}\end{equation}
 For ease of notation, we define new fermionic operators \(A_{{\bf k},\sigma}\) and \(B_{{\bf k},\sigma}\):
-\begin{equation}\begin{aligned}
-	A_{{\bf k},\sigma} = \frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} - f_{{\bf k - Q_1},\sigma}\right), {\bf k}\in\mathcal{Q}_1~,\\
-	B_{{\bf k},\sigma} = \frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} - f_{{\bf k + Q_2},\sigma}\right), {\bf k}\in\mathcal{Q}_2~,
+\begin{equation}\begin{aligned}\label{defineA}
+	A_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} \pm f_{{\bf k - Q_1},\sigma}\right), {\bf k}\in\mathcal{Q}_1~,\\
+	B_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} \pm f_{{\bf k + Q_2},\sigma}\right), {\bf k}\in\mathcal{Q}_2~,
 \end{aligned}\end{equation}
-which satisfy the appropriate algebra: \(\left\{A_{{\bf k},\sigma}, A_{{\bf k}^\prime,\sigma^\prime}\right\} = \left\{B_{{\bf k},\sigma}, B_{{\bf k}^\prime,\sigma^\prime}\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\) and \(\left\{A_{{\bf k},\sigma}, B_{{\bf k}^\prime,\sigma^\prime}\right\} = 0\).
+which satisfy the appropriate algebra: \(\left\{A_{{\bf k},\sigma, p}, A_{{\bf k}^\prime,\sigma^\prime, p^\prime}\right\} = \left\{B_{{\bf k},\sigma, p}, B_{{\bf k}^\prime,\sigma^\prime, p^\prime}\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\delta{p, p^\prime}\) and \(\left\{A_{{\bf k},\sigma,p}, B_{{\bf k}^\prime,\sigma^\prime,p^\prime}\right\} = 0\), with \(p=\pm\) denoting the flavours of the \(A\) and \(B\) fields. Note that only the \(p=-1\) flavour enters the Hamiltonian. Henceforth, we drop the label \(\pm\) and it is implied that \(A\) and \(B\) refer to the \(p=-1\) variants.
 
 Decomposing the sum over \({\bf q}\) in a similar fashion, we get
 \begin{equation}\begin{aligned}
@@ -152,14 +160,29 @@ To further simplify things, We first replace the summations over \(\mathcal{Q}_2
 	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[J_f^*({\bf k},{\bf q}) \left(A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + B^\dagger_{{\bf \bar k},\alpha}B_{{\bf \bar q},\beta}\right) + J_f^*({\bf \bar k},{\bf q}) \left(B^\dagger_{{\bf k},\alpha}A_{{\bf \bar q},\beta} + A^\dagger_{{\bf k},\alpha}B_{{\bf \bar q},\beta}\right)\right] ~.
 \end{aligned}\end{equation}
 To remove all explicit references to operators in \(\mathcal{Q}_2\), we define a new set of operators:
-\begin{equation}\begin{aligned}
-	\gamma_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma} \pm B_{{\bf \bar k},\sigma}\right), {\bf k}\in \mathcal{Q}_1~,
+\begin{equation}\begin{aligned}\label{defineGamma}
+	\gamma_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma,-} \pm B_{{\bf \bar k},\sigma,-}\right), {\bf k}\in \mathcal{Q}_1~,\\
+	\phi_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma,+} \pm B_{{\bf \bar k},\sigma,+}\right), {\bf k}\in \mathcal{Q}_1~,
 \end{aligned}\end{equation}
-which are again fermionic: \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\pm}^\dagger\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\), \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\mp}^\dagger\right\} = 0\). In terms of these new operator, we finally obtain a Hamiltonian which is formally defined on just the first quadrant \(\mathcal{Q}_1\) (this is however purely formal because there are now twice as many modes on \(\mathcal{Q}_1\) than before):
+where we have restored the \(p\)-values into the \(A\) and \(B\) fields in order to define two new kinds of fields, which are again fermionic: \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\pm}^\dagger\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\), \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\mp}^\dagger\right\} = 0\). In terms of these new operator, we finally obtain a Hamiltonian which is formally defined on just the first quadrant \(\mathcal{Q}_1\) (this is however purely formal because there are now twice as many modes on \(\mathcal{Q}_1\) than before):
 \begin{equation}\begin{aligned}
 	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
 	&= \sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[\left[J_f^*({\bf k},{\bf q}) + J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,+}\gamma_{{\bf q},\alpha,+} + \left[J_f^*({\bf k},{\bf q}) - J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,-}\gamma_{{\bf q},\alpha,-}\right] \\
 \end{aligned}\end{equation}
+
+\section{Correlations in truncated representation}
+In order to calculate equal-time correlations (such as \(\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}} \)), we combine eqs.~\ref{defineA} and \ref{defineGamma} to express the bare fields \(f_{{\bf k},\sigma}\) in terms of the new fields \(\gamma_{{\bf k},\sigma,\pm}\) and \(\phi_{{\bf k},\sigma,\pm}\):
+\begin{equation}\begin{aligned}
+	&f_{{\bf k},\sigma} = \frac{1}{2}\left(\phi_{{\bf k},\sigma,+} + \phi_{{\bf k},\sigma,-} + \gamma_{{\bf k},\sigma,+} + \gamma_{{\bf k},\sigma,-}\right), ~ &&f_{{\bf \bar k},\sigma} = \frac{1}{2}\left(\phi_{{\bf k},\sigma,+} - \phi_{{\bf k},\sigma,-} + \gamma_{{\bf k},\sigma,+} - \gamma_{{\bf k},\sigma,-}\right),\\
+	&f_{{\bf k} - {\bf Q}_1,\sigma} = \frac{1}{2}\left(\phi_{{\bf k},\sigma,+} + \phi_{{\bf k},\sigma,-} - \gamma_{{\bf k},\sigma,+} - \gamma_{{\bf k},\sigma,-}\right),~ &&f_{{\bf \bar k} + {\bf Q}_2,\sigma} = \frac{1}{2}\left(\phi_{{\bf k},\sigma,+} - \phi_{{\bf k},\sigma,-} - \gamma_{{\bf k},\sigma,+} + \gamma_{{\bf k},\sigma,-}\right),
+\end{aligned}\end{equation}
+where the four relations act on operators in four quadrants. Suppose that both \({\bf k}\) and \({\bf k}^\prime\) in the correlation \(\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}}\) are from the first quadrant. Since the fields \(\phi\) do not appear in the Hamiltonian, they will not contribute to the correlation measures in the absence of symmetry breaking and entanglement. As an example, the correlation defined above can be expressed as
+\begin{equation}\begin{aligned}
+	\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}} = \braket{S_d^+ (\gamma^\dagger_{{\bf k},\downarrow,+} + \gamma^\dagger_{{\bf k},\downarrow,-})(\gamma_{{\bf k}^\prime,\uparrow,+} + \gamma_{{\bf k}^\prime,\uparrow,-})}~,
+\end{aligned}\end{equation}
+and so can be computed from the four correlations \(\braket{S_d^+ \gamma^\dagger_{{\bf k},\downarrow,\pm} \gamma_{{\bf k}^\prime,\uparrow,\pm}}\).
+
+
 
 
 
