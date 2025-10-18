@@ -10,7 +10,7 @@ onecolumn,
 
 \begin{document}
 
-\title{Quantum criticality in a Kondo-Mott Lattice Model}
+\title{Quantum criticality in a Kondo-Mott lattice model}
 
 \author{Abhirup Mukherjee}
 \author{Siddhartha Lal}
@@ -23,7 +23,7 @@ onecolumn,
 	H_\text{aux}({\bf r}_d) = H^{(0)} + H_f({\bf r}_d) + H_c({\bf r}_d) + H_{fc}({\bf r}_d)~,
 \end{aligned}\end{equation}
 \begin{equation}\begin{aligned}
-	H^{(0)} =& -t_f\sum_{\braket{i,j},\sigma}\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right) - \mu_c\sum_{i,\sigma}c^\dagger_{i,\sigma}c_{i,\sigma}~,\\
+	H^{(0)} =& -t_f\sum_{\braket{i,j},\sigma}\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right) - \mu\sum_{i,\sigma}\left(f^\dagger_{i,\sigma}f_{i,\sigma} + c^\dagger_{i,\sigma}c_{i,\sigma}\right) ~,\\
 	H_f({\bf r}_d) =& V_f\sum_{Z \in \text{NN}}\sum_{\sigma}\left(f^\dagger_{{\bf r}_d,\sigma} f_{Z,\sigma} + \text{h.c.}\right) + \epsilon_f \sum_\sigma f^\dagger_{{\bf r}_d,\sigma}f_{{\bf r}_d,\sigma} + U_f f^\dagger_{{\bf r}_d,\uparrow}f_{{\bf r}_d,\uparrow} f^\dagger_{{\bf r}_d,\downarrow}f_{{\bf r}_d,\downarrow} \\
 				   &+ J_f\sum_{Z \in \text{NN}}\sum_{\alpha,\beta}{\bf S}_f({\bf r}_d) \cdot {\boldsymbol{\sigma}}_{\alpha\beta}f^\dagger_{Z,\alpha}f_{Z,\beta} - \frac{W_f}{2} \sum_{Z \in \text{NN}}\left(f^\dagger_{Z,\uparrow}f_{Z,\uparrow} - f^\dagger_{Z,\downarrow}f_{Z,\downarrow} \right)^2~,\\
 	H_c({\bf r}_d) =& - \frac{W}{2}\left(c^\dagger_{{\bf r}_d,\uparrow}c_{{\bf r}_d,\uparrow} - c^\dagger_{{\bf r}_d,\downarrow}c_{{\bf r}_d,\downarrow} \right)^2~,\\
@@ -33,7 +33,8 @@ onecolumn,
 \section{Tiling reconstruction}
 \begin{equation}\begin{aligned}
 	H_\text{tiled} =& \sum_{{\bf r}_d}H_\text{aux}({\bf r}_d) - (N-1) H^{(0)} \\
-	=& \sum_{\braket{i,j},\sigma}\left[-t_f\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right)\right] + \tilde J \sum_{\braket{i,j}}{\bf S}_f(i) \cdot {\bf S_f}(j) + J\sum_i {\bf S}_f(i)\cdot {\bf S}_c(i) - U\sum_i \left(f^\dagger_{i,\uparrow}f_{i,\uparrow} - f^\dagger_{i,\downarrow}f_{i,\downarrow}\right)^2
+	=& \sum_{\braket{i,j},\sigma}\left[-t_f\left(f^\dagger_{i,\sigma}f_{j,\sigma} + \text{h.c.}\right) -t\left(c^\dagger_{i,\sigma}c_{j,\sigma} + \text{h.c.}\right)\right] + \tilde J \sum_{\braket{i,j}}{\bf S}_f(i) \cdot {\bf S_f}(j) + J\sum_i {\bf S}_f(i)\cdot {\bf S}_c(i) - U\sum_i \left(f^\dagger_{i,\uparrow}f_{i,\uparrow} - f^\dagger_{i,\downarrow}f_{i,\downarrow}\right)^2 \\
+	 &- \mu N
 \end{aligned}\end{equation}
 
 \section{Coupling renormalisation group flows}
@@ -50,7 +51,7 @@ Off-diagonal terms:
 \end{aligned}\end{equation}
 where \({\bf \bar q} = {\boldsymbol \pi} + {\bf q}\) is the charge conjugate partner of \({\bf q}\), and the propagators \(G_f\) and \(G\) are defined as
 \begin{equation}\begin{aligned}\label{propagators}
-	G_f(\omega,{\bf q}) &= \left(\omega - \frac{1}{2}|\varepsilon_f({\bf q})| + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + W_f({\bf q})/2 - \epsilon_f\right)^{-1} ~,\\
+	G_f(\omega,{\bf q}) &= \frac{1}{2}\left[\left(\omega - \frac{1}{2}\left(|\varepsilon_f({\bf q})| - \mu\right) + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + W_f({\bf q})/2 - \epsilon_f\right)^{-1} + \left(\omega - \frac{1}{2}\left(|\varepsilon_f({\bf q})| + \mu\right) + J^{(j)}_f\left({\bf q},{\bf q}\right)/4 + W_f({\bf q})/2 - \epsilon_f\right)^{-1}\right] ~,\\
 	G(\omega,{\bf q}) &= \frac{1}{2}\left[\left(\omega - \frac{1}{2}|\varepsilon({\bf q})| + J^{(j)}/4 + W/2 + \mu/2\right)^{-1} + \left(\omega - \frac{1}{2}|\varepsilon({\bf q})| + J^{(j)}/4 + W/2 - \mu/2\right)^{-1}\right] ~.
 \end{aligned}\end{equation}
 
@@ -164,7 +165,7 @@ To remove all explicit references to operators in \(\mathcal{Q}_2\), we define a
 	\gamma_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma,-} \pm B_{{\bf \bar k},\sigma,-}\right), {\bf k}\in \mathcal{Q}_1~,\\
 	\phi_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma,+} \pm B_{{\bf \bar k},\sigma,+}\right), {\bf k}\in \mathcal{Q}_1~,
 \end{aligned}\end{equation}
-where we have restored the \(p\)-values into the \(A\) and \(B\) fields in order to define two new kinds of fields, which are again fermionic: \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\pm}^\dagger\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\), \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\mp}^\dagger\right\} = 0\). In terms of these new operator, we finally obtain a Hamiltonian which is formally defined on just the first quadrant \(\mathcal{Q}_1\) (this is however purely formal because there are now twice as many modes on \(\mathcal{Q}_1\) than before):
+where we have restored the \(p\)-values into the \(A\) and \(B\) fields in order to define two new fermionic fields: \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\pm}^\dagger\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\), \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\mp}^\dagger\right\} = 0\). In terms of these new fields, we finally obtain a Hamiltonian which is defined purely in the first quadrant \(\mathcal{Q}_1\) (this is however mostly formal because there are now twice as many modes on \(\mathcal{Q}_1\) than before):
 \begin{equation}\begin{aligned}
 	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
 	&= \sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[\left[J_f^*({\bf k},{\bf q}) + J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,+}\gamma_{{\bf q},\alpha,+} + \left[J_f^*({\bf k},{\bf q}) - J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,-}\gamma_{{\bf q},\alpha,-}\right] \\
@@ -178,11 +179,90 @@ In order to calculate equal-time correlations (such as \(\braket{S_d^+ f^\dagger
 \end{aligned}\end{equation}
 where the four relations act on operators in four quadrants. Suppose that both \({\bf k}\) and \({\bf k}^\prime\) in the correlation \(\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}}\) are from the first quadrant. Since the fields \(\phi\) do not appear in the Hamiltonian, they will not contribute to the correlation measures in the absence of symmetry breaking and entanglement. As an example, the correlation defined above can be expressed as
 \begin{equation}\begin{aligned}
-	\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}} = \braket{S_d^+ (\gamma^\dagger_{{\bf k},\downarrow,+} + \gamma^\dagger_{{\bf k},\downarrow,-})(\gamma_{{\bf k}^\prime,\uparrow,+} + \gamma_{{\bf k}^\prime,\uparrow,-})}~,
+	\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}} = \frac{1}{4}\braket{S_d^+ (\gamma^\dagger_{{\bf k},\downarrow,+} + \gamma^\dagger_{{\bf k},\downarrow,-})(\gamma_{{\bf k}^\prime,\uparrow,+} + \gamma_{{\bf k}^\prime,\uparrow,-})}~,
 \end{aligned}\end{equation}
 and so can be computed from the four correlations \(\braket{S_d^+ \gamma^\dagger_{{\bf k},\downarrow,\pm} \gamma_{{\bf k}^\prime,\uparrow,\pm}}\).
 
+\section{Bilayer extended Hubbard model: Impurity model}
+We approach the heavy-fermion problem by starting from a bilayer extended Hubbard model, consisting of two layers (\(f\) and \(c\)). Towards studying this lattice model, we adopt a two-layer impurity problem that hosts a correlated impurity site in each layer (\(S_f\) and \(S_d\)):
+\begin{equation}\begin{aligned}
+	H_\text{aux} = H_\text{iti} + H_f + H_d + H_{fd}~,
+\end{aligned}\end{equation}
+where \(H_\text{iti}\) is  the Hamiltonian for the non-interacting itinerant electrons of either layer,
+\begin{equation}\begin{aligned}
+H_\text{iti} = -\sum_{\sigma,\alpha}\left[t_\alpha\sum_{\braket{i,j}}\left(c^\dagger_{i,\sigma,\alpha}c_{j,\sigma,\alpha} + \text{h.c.}\right) + \mu\sum_{i,\sigma,\alpha}n_{i,\sigma,\alpha}\right] ~,
+\end{aligned}\end{equation}
+such that \(\alpha\) sums over the two layers \(f\) and \(d\). \(H_f\) and \(H_d\) describe the dynamics of the correlated impurity sites (and their local neighbourhood) in each layer:
+\begin{equation}\begin{aligned}
+	H_\alpha = \varepsilon_\alpha \sum_\sigma n_{\alpha,\sigma} + U_\alpha n_{\alpha,\uparrow} n_{\alpha,\downarrow} + \sum_{Z \in \text{NN}}\left[V_\alpha\sum_{\sigma}\left(\alpha^\dagger_{\sigma} c_{Z,\sigma,\alpha} + \text{h.c.}\right) + \frac{1}{2}J_\alpha\sum_{\alpha,\beta}{\bf S}_\alpha \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{Z,\alpha,\alpha}c_{Z,\beta,\alpha} - \frac{W_\alpha}{2} \left(n_{Z,\uparrow,\alpha} - n_{Z,\downarrow,\alpha}\right)^2\right] ~,\\
+\end{aligned}\end{equation}
+where \(\alpha^\dagger_{\sigma}\) can refer to creation operator for either the \(f-\)layer (\(f^\dagger_{\sigma}\)) or the \(d-\)layer (\(d^\dagger_{\sigma}\)). Finally, \(H_{fd}\) represents the inter-layer hybridisation:
+\begin{equation}\begin{aligned}
+	H_{fc} = J{\bf S}_f \cdot {\bf S}_d + V \sum_\sigma\left(f^\dagger_{\sigma} d_{\sigma} + \text{h.c.}\right)~,\\
+\end{aligned}\end{equation}
 
+Tiling the impurity model leads to bilayer extended Hubbard model. In order to tile, we place the impurity sites at a position \({\bf r}\) on the lattice, and then we translate the entire model, taking into account the overcounting of the itinerant electrons:
+\begin{equation}\begin{aligned}
+	H_\text{tiled} &= \sum_{{\bf r}}H_\text{aux}({\bf r}) - (N-1) H_\text{iti} \\
+	&= \sum_\alpha\left[-\tilde t_\alpha\sum_{\braket{i,j},\sigma}\left(c^\dagger_{i,\sigma,\alpha}c_{j,\sigma,\alpha} + \text{h.c.}\right) + \tilde J \sum_{\braket{i,j}}{\bf S}_{i,\alpha} \cdot {\bf S}_{j,\alpha} + \varepsilon_\alpha \sum_{i,\sigma}n_{i,\sigma,\alpha} + U_\alpha \sum_i n_{i,\uparrow,\alpha}n_{i,\downarrow,\alpha} \right] \\
+	 &+ \sum_i \left[J {\bf S}_{i,f} \cdot {\bf S}_{j,d} + V\sum_\sigma\left(c^\dagger_{i,\sigma,f}c_{i,\sigma,d} + \text{h.c.}\right) \right]	
+\end{aligned}\end{equation}
+
+\section{Unitary RG Analysis of bilayer lattice-embedded SIAM}
+In the limit of large \(U_\alpha\), we carry out a Schrieffer-Wolff transformation and work with the following low-energy Hamiltonian:
+\begin{equation}\begin{aligned}
+	H_\text{aux} &= \sum_{{\bf k},\sigma,\alpha}\epsilon_{{\bf k},\alpha}n_{{\bf k},\sigma,\alpha} + \sum_\alpha\sum_{Z \in \text{NN}}\left[\frac{1}{2}J_\alpha\sum_{\alpha,\beta}{\bf S}_\alpha \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{Z,\alpha,\alpha}c_{Z,\beta,\alpha} - \frac{W_\alpha}{2} \left(n_{Z,\uparrow,\alpha} - n_{Z,\downarrow,\alpha}\right)^2\right] + J{\bf S}_f \cdot {\bf S}_d~.
+\end{aligned}\end{equation}
+
+In order to study the low-energy physics of the impurity model, we iteratively integrate out high-energy degrees of freedom using the unitary RG method. We already have the renormalisation group equations for the couplings \(J_\alpha\) in the case of \(J=0\). It turns out that even upon switching on \(J\), no additional processes exist which renormalise \(J_\alpha\). As a result, their RG equations remain unchanged.
+
+We now turn to the renormalisation of \(J\). More specifically, we consider the spin-flip component \(J S_f^+ S_d^-\). The various processes contributing to its renormalisation can be classified into the following groups.
+\subsection{Through spin-flip scattering within \(f-\) and \(d-\)layers}
+We first consider scattering processes that integrate out particle (occupied) states of the high-energy subspace. One such process is
+\begin{equation}\begin{aligned}
+	\Delta_{1} = \frac{1}{N^2}\sum_{{\bf q} \in \text{UV}}\sum_{{\bf k} \in \text{IR}}\frac{1}{2}J S_f^+ S_d^- G_{2,f}(\epsilon_{{\bf q},f} - \epsilon_{{\bf k},f}) \frac{1}{2}J_f S_f^- c^\dagger_{{\bf q}\uparrow}c_{{\bf k}\downarrow} G_{1,f}(\epsilon_{{\bf k},f} - \epsilon_{{\bf q},f}, {\bf k}, {\bf q}) \frac{1}{2}J_fS_f^+ c^\dagger_{{\bf k}\downarrow}c_{{\bf q}\uparrow}~,
+\end{aligned}\end{equation}
+where \(G_{1,f}\) and \(G_{2,f}\) are propagators for the first and second intermediate states:
+\begin{equation}\begin{aligned}
+	G_{1,f}(E, {\bf k}, {\bf q}) &= \frac{1}{\omega - \frac{1}{2}E + \frac{1}{4}\left(J_f({\bf k}) + J_f({\bf q})\right) + \frac{1}{2}\left(W_f({\bf k}) + W_f({\bf q})\right)}~,\quad G_{2,f}(E) &= \frac{1}{\omega - \frac{1}{2}E}~.
+\end{aligned}\end{equation}
+Upon contracting the momentum field operators, we get
+\begin{equation}\begin{aligned}
+	\Delta_{1} &= S_f^+ S_d^- \frac{1}{N^2}\frac{1}{8}J J_f^2 \sum_{{\bf q} \in \text{UV}}\sum_{{\bf k} \in \text{IR}}G_{1,f}(\epsilon_{{\bf k},f} - \epsilon_{{\bf q},f}, {\bf k}, {\bf q}) G_{2,f}(\epsilon_{{\bf q},f} - \epsilon_{{\bf k},f}) n_{{\bf q}\uparrow}\left(1 - n_{{\bf k}\downarrow}\right)\\
+			   &= S_f^+ S_d^- \frac{1}{8}J J_f^2 \int_\text{UV} d\epsilon_1 \int_\text{IR} d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2) n_{{\bf q}\uparrow}\left(1 - n_{{\bf k}\downarrow}\right) \\ 
+			   &= S_f^+ S_d^- \frac{1}{8}J J_f^2 \int_{-D}^{-(D - \delta D)} d\epsilon_1 \int_0^D d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2)~.
+\end{aligned}\end{equation}
+
+A very similar process can be constructed by reversing the sequence of operations in the present process, while staying in the occupied sector:
+\begin{equation}\begin{aligned}
+	\Delta_{2} = \frac{1}{N^2}\sum_{{\bf q} \in \text{UV}}\sum_{{\bf k} \in \text{IR}}\frac{1}{2}J_fS_f^+ c^\dagger_{{\bf q}\downarrow}c_{{\bf k}\uparrow}  G_{1,f}(\epsilon_{{\bf k},f} - \epsilon_{{\bf q},f}, {\bf k}, {\bf q}) \frac{1}{2}J_f S_f^- c^\dagger_{{\bf k}\uparrow}c_{{\bf q}\downarrow} G_{2,f}(\epsilon_{{\bf q},f} - \epsilon_{{\bf k},f}) \frac{1}{2}J S_f^+ S_d^- ~.
+\end{aligned}\end{equation}
+This leads to an exchange of the intermediate states, leaving the product of propagators \(G_{1,f} G_{2,f}\) unchanged. Combining with the previous contribution, we get
+\begin{equation}\begin{aligned}
+	\Delta_{1}  + \Delta_2 &= S_f^+ S_d^- \frac{1}{8}J J_f^2 \int_\text{UV} d\epsilon_1 \int_\text{IR} d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2) \sum_\sigma n_{{\bf q}\sigma}\left(1 - n_{{\bf k}\bar\sigma}\right)\\
+						   &= S_f^+ S_d^- \frac{1}{4}J J_f^2 \int_{-D}^{-(D - \delta D)} d\epsilon_1 \int_0^D d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2)~.
+\end{aligned}\end{equation}
+
+The particle-hole transformed contribution is easily obtained by switching the momentum indices in the propagators. In total, we get
+\begin{equation}\begin{aligned}
+	\Delta_{1}  + \Delta_2 = S_f^+ S_d^- \frac{1}{4}J J_f^2 &\left[\int_{-D}^{-(D - \delta D)} d\epsilon_1 \int_0^D d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2) \right.\\
+															&+\left. \int_{D - \delta D}^{D} d\epsilon_1 \int_{-D}^0 d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_1 - \epsilon_2, {\bf k}, {\bf q}) G_{2,f}(\epsilon_2 - \epsilon_1)\right]~\\
+	=S_f^+ S_d^- \frac{1}{4}J J_f^2 &\int_{D - \delta D}^{D} d\epsilon_1 \int_{-D}^0 d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}\left[G_{1,f}(\epsilon_1 - \epsilon_2, {\bf k}, {\bf q}) G_{2,f}(\epsilon_2 - \epsilon_1) + G_{1,f}(\epsilon_1 - \epsilon_2, {\bf k} + {\bf Q}_2, {\bf q} + {\bf Q}_2) G_{2,f}(\epsilon_2 - \epsilon_1)\right]~,
+\end{aligned}\end{equation}
+where we substituted \(\epsilon_i \to -\epsilon_i\) in the first integral and used \(\epsilon_{\bf q} = -\epsilon_{{\bf q} + {\bf Q}_2}\), with \({\bf Q}_2 = \left(\pi, \pi\right)\). Using the properties of \(J\) and \(W\), we can show that \(J({\bf k}_1) = J({\bf k}_1 + {\bf Q}_2)\). This property allows us to equate the two products within the integrand:
+\begin{equation}\begin{aligned}
+	\Delta_{1,f}  + \Delta_{2,f} = \frac{1}{2}S_f^+ S_d^- J J_f^2 &\int_{D - \delta D}^{D} d\epsilon_1 \int_{-D}^0 d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_1 - \epsilon_2, {\bf k}, {\bf q}) G_{2,f}(\epsilon_2 - \epsilon_1) ~.
+\end{aligned}\end{equation}
+where the subscript \(f\) indicates that this takes into account spin-flip scattering processes within the \(f-\)layer.
+
+Carrying out the same computation for the \(d-\)layer simply requires changing all \(f-\)quantities to \(d-\)quantities:
+\begin{equation}\begin{aligned}
+	\Delta_{1,d}  + \Delta_{2,d} = \frac{1}{2}S_f^+ S_d^- J J_d^2 &\int_{D - \delta D}^{D} d\epsilon_1 \int_{-D}^0 d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,d}(\epsilon_1 - \epsilon_2, {\bf k}, {\bf q}) G_{2,d}(\epsilon_2 - \epsilon_1) ~,
+\end{aligned}\end{equation}
+where 
+\begin{equation}\begin{aligned}
+	G_{1,d}(E, {\bf k}, {\bf q}) &= \frac{1}{\omega - \frac{1}{2}E + \frac{1}{4}\left(J_d({\bf k}) + J_d({\bf q})\right) + \frac{1}{2}\left(W_d({\bf k}) + W_d({\bf q})\right)}~,\quad G_{2,d}(E) &= \frac{1}{\omega - \frac{1}{2}E}~.
+\end{aligned}\end{equation}
 
 
 
