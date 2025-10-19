@@ -4,8 +4,9 @@ superscriptaddress,
 groupedaddress,
 superscriptaddress,
 onecolumn,
+10pt
 ]{revtex4-2}
-\usepackage[margin=1cm]{geometry}
+\usepackage[margin=2cm]{geometry}
 \usepackage{graphicx,braket,bm,hyperref,amsmath,amssymb}
 
 \begin{document}
@@ -211,12 +212,63 @@ Tiling the impurity model leads to bilayer extended Hubbard model. In order to t
 \section{Unitary RG Analysis of bilayer lattice-embedded SIAM}
 In the limit of large \(U_\alpha\), we carry out a Schrieffer-Wolff transformation and work with the following low-energy Hamiltonian:
 \begin{equation}\begin{aligned}
-	H_\text{aux} &= \sum_{{\bf k},\sigma,\alpha}\epsilon_{{\bf k},\alpha}n_{{\bf k},\sigma,\alpha} + \sum_\alpha\sum_{Z \in \text{NN}}\left[\frac{1}{2}J_\alpha\sum_{\alpha,\beta}{\bf S}_\alpha \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{Z,\alpha,\alpha}c_{Z,\beta,\alpha} - \frac{W_\alpha}{2} \left(n_{Z,\uparrow,\alpha} - n_{Z,\downarrow,\alpha}\right)^2\right] + J{\bf S}_f \cdot {\bf S}_d~.
+	H_\text{aux} &= \sum_{{\bf k},\sigma,\alpha}\epsilon_{{\bf k},\alpha}n_{{\bf k},\sigma,\alpha} + \sum_\alpha\sum_{Z \in \text{NN}}\left[\frac{1}{2}J_\alpha\sum_{\sigma,\sigma^\prime}{\bf S}_\alpha \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{Z,\sigma,\alpha}c_{Z,\sigma^\prime,\alpha} - \frac{W_\alpha}{2} \left(n_{Z,\uparrow,\alpha} - n_{Z,\downarrow,\alpha}\right)^2\right] + J{\bf S}_f \cdot {\bf S}_d~.
 \end{aligned}\end{equation}
 
 In order to study the low-energy physics of the impurity model, we iteratively integrate out high-energy degrees of freedom using the unitary RG method. We already have the renormalisation group equations for the couplings \(J_\alpha\) in the case of \(J=0\). It turns out that even upon switching on \(J\), no additional processes exist which renormalise \(J_\alpha\). As a result, their RG equations remain unchanged.
 
-We now turn to the renormalisation of \(J\). More specifically, we consider the spin-flip component \(J S_f^+ S_d^-\). The various processes contributing to its renormalisation can be classified into the following groups.
+We now turn to the renormalisation of \(J\), arising from hybridisation of \(f-\) and \(d-\)layers. Let the momentum states being decoupled from the two layers be \(\ket{{\bf q}_\pm,\sigma,f}\) and \(\ket{{\bf q}_\pm,\sigma,d}\), where the subscript indicates the sign of the energy of that state (and hence whether its occupancy in the low-energy configurations \(\ket{L}_f\), \(\ket{L}_d\)). In order to capture coherent scattering processes between the two layers, we project onto the following rotated basis of excited states:
+\begin{equation}\begin{aligned}
+	\ket{H}_\pm &= \frac{1}{\sqrt{2}}\left(\ket{H({\bf q})}_f \pm \ket{H({\bf q})}_d\right)~,\\
+	\mathcal{P({\bf q})}_H &= \ket{H}_+\bra{H}_+ + \ket{H}_-\bra{H}_-~,
+\end{aligned}\end{equation}
+where \(\ket{H({\bf q})}_\alpha\) is the state obtained upon exciting both states \(\ket{\bf q}_\pm\) in the layer \(\alpha\): \(\ket{H(q)}_\alpha = c^\dagger_{\bf q_+,\alpha}c_{\bf q_-,\alpha}\ket{L}_f\ket{L}_d\), and \(\mathcal{P({\bf q})}_H\) projects onto this rotated excited basis. We focus on the spin-flip component \(J S_f^+ S_d^-\) of the Hamiltonian. There are two kinds of processes that renormalise this coupling. We first consider one that involves a spin-flip of the \(d-\)layer followed by a spin-flip of the \(f-\)layer:
+\begin{equation}\begin{aligned}\label{rgEqtn1}
+	\Delta H = \frac{1}{N^2}\sum_{{\bf q} \in \text{UV}}\braket{L | \frac{1}{2}J_f S_f^+ c^\dagger_{{\bf q-}_\downarrow,f}c_{{\bf q+}\uparrow,f} \mathcal{P({\bf q})}_H G \mathcal{P({\bf q})}_H\frac{1}{2}J_dS_d^- c^\dagger_{{\bf q+}\uparrow,d}c_{{\bf q-}\downarrow,d} | L }~,
+\end{aligned}\end{equation}
+where \(\ket{L} = \ket{L}_f \ket{L}_d\) is the initial configuration for both layers. \(G\) is the propagator for the excited state:
+\begin{equation}\begin{aligned}
+	G = \frac{1}{\omega - H_D}~,
+\end{aligned}\end{equation}
+where \(H_D\) is the diagonal part of the Hamiltonian corresponding to the excited(intermediate) state. The diagonal part consists of the kinetic energy and the Ising part of the Kondo interaction:
+\begin{equation}\begin{aligned}
+	H_D = \sum_{{\bf q,\sigma}\in{\bf q}_\pm, \alpha}\epsilon_\alpha({\bf q})\tau_{{\bf q},\sigma} + \sum_\alpha J_\alpha S_\alpha^z \sum_{{\bf q},\sigma}\sigma n_{{\bf q},\sigma,\alpha}~.
+\end{aligned}\end{equation}
+Calculating the matrix elements of the propagator in the rotated basis gives
+\begin{equation}\begin{aligned}\label{PGP}
+	\mathcal{P({\bf q})}_H G \mathcal{P({\bf q})}_H = \frac{1}{2}\left(G_f + G_d\right)\left(\ket{H}_+\bra{H}_+ + \ket{H}_-\bra{H}_-\right) + \frac{1}{2}\left(G_f - G_d\right)\left(\ket{H}_+\bra{H}_- + \ket{H}_-\bra{H}_+\right)~,
+\end{aligned}\end{equation}
+where
+\begin{equation}\begin{aligned}
+	G_\alpha = \frac{1}{\omega - \frac{1}{2}\left[\epsilon_\alpha(q_+) - \epsilon_\alpha(q_-)\right] + \frac{1}{2}J_\alpha + W_\alpha}~.
+\end{aligned}\end{equation}
+
+In eq.~\ref{rgEqtn1}, since the first process is an excitation into a \(d-\)state and the second process is a de-excitation from an \(f-\)state, the expression can be simplified into
+\begin{equation}\begin{aligned}\label{rgEqtn2}
+	\braket{L | S_f^+ c^\dagger_{{\bf q-}_\downarrow,f}c_{{\bf q+}\uparrow,f} \mathcal{P({\bf q})}_H G \mathcal{P({\bf q})}_H S_d^- c^\dagger_{{\bf q+}\uparrow,d}c_{{\bf q-}\downarrow,d} | L } = S_f^+ S_d^- \braket{H_f | \mathcal{P({\bf q})}_H G \mathcal{P({\bf q})}_H | H_d} = \frac{1}{2}\left(G_f + G_d\right) S_f^+ S_d^-~.
+\end{aligned}\end{equation}
+The net Hamiltonian renormalisation is finally a sum over the contribution from each mode:
+\begin{equation}\begin{aligned}
+	\Delta H = \frac{1}{8N^2}J_f J_d \sum_{{\bf q} \in \text{UV}}\left(G_f + G_d\right) S_f^+ S_d^-~.
+\end{aligned}\end{equation}
+Converting the sums to integrals (assuming a density of states \(\rho({\bf q})\)) gives the final expression
+\begin{equation}\begin{aligned}
+	\frac{\Delta H}{\Delta D} = \frac{1}{8N} S_f^+ S_d^-J_f J_d \int_{UV} d{\bf q} ~\rho({\bf q}) \left(G_f + G_d\right)~.
+\end{aligned}\end{equation}
+
+The time-reversed of this process can be obtained simply by exchanging the \(d-\)interaction with the \(f-\)interaction. Since the renormalisation itself is symmetric, the contribution is equal to what we obtained here. The total renormalisation in the coupling for the term \(S_f^+ S_d^-\) is therefore
+\begin{equation}\begin{aligned}
+	\frac{\Delta J}{\Delta D} &= \frac{1}{2}J_f J_d \int_{UV} d{\bf q} ~\rho({\bf q}) \left(G_f + G_d\right) \\
+							  &= \frac{1}{2}J_f J_d \int_{UV} d{\bf q} ~\rho({\bf q}) \left[\frac{1}{\omega - \frac{1}{2}\left[\epsilon_f(q_+) - \epsilon_f(q_-)\right] + \frac{1}{2}J_f + W_f} + \frac{1}{\omega - \frac{1}{2}\left[\epsilon_d(q_+) - \epsilon_d(q_-)\right] + \frac{1}{2}J_d + W_d}\right]
+\end{aligned}\end{equation}
+
+
+
+
+
+\newpage
+
+The various processes contributing to its renormalisation can be classified into the following groups.
 \subsection{Through spin-flip scattering within \(f-\) and \(d-\)layers}
 We first consider scattering processes that integrate out particle (occupied) states of the high-energy subspace. One such process is
 \begin{equation}\begin{aligned}
