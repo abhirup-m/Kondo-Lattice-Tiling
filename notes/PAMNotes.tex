@@ -232,7 +232,7 @@ where \(\ket{L} = \ket{L}_f \ket{L}_d\) is the initial configuration for both la
 \end{aligned}\end{equation}
 where \(H_D\) is the diagonal part of the Hamiltonian corresponding to the excited(intermediate) state. The diagonal part consists of the kinetic energy and the Ising part of the Kondo interaction:
 \begin{equation}\begin{aligned}
-	H_D = \sum_{{\bf q,\sigma}\in{\bf q}_\pm, \alpha}\epsilon_\alpha({\bf q})\tau_{{\bf q},\sigma} + \sum_\alpha J_\alpha S_\alpha^z \sum_{{\bf q},\sigma}\sigma n_{{\bf q},\sigma,\alpha}~.
+	H_D = \sum_{{\bf q,\sigma}\in{\bf q}_\pm, \alpha}\epsilon_\alpha({\bf q})\tau_{{\bf q},\sigma} + \sum_\alpha J_\alpha S_\alpha^z \sum_{{\bf q},\sigma}\sigma n_{{\bf q},\sigma,\alpha} + J \vec{S}_f \cdot \vec{S}_d~.
 \end{aligned}\end{equation}
 Calculating the matrix elements of the propagator in the rotated basis gives
 \begin{equation}\begin{aligned}\label{PGP}
@@ -240,7 +240,7 @@ Calculating the matrix elements of the propagator in the rotated basis gives
 \end{aligned}\end{equation}
 where
 \begin{equation}\begin{aligned}
-	G_\alpha = \frac{1}{\omega - \frac{1}{2}\left[\epsilon_\alpha(q_+) - \epsilon_\alpha(q_-)\right] + \frac{1}{2}J_\alpha + W_\alpha}~.
+	G_\alpha = \frac{1}{\omega - \frac{1}{2}\left[\epsilon_\alpha(q_+) - \epsilon_\alpha(q_-)\right] + \frac{1}{2}J_\alpha + W_\alpha - \frac{1}{4}J}~.
 \end{aligned}\end{equation}
 
 In eq.~\ref{rgEqtn1}, since the first process is an excitation into a \(d-\)state and the second process is a de-excitation from an \(f-\)state, the expression can be simplified into
@@ -259,7 +259,7 @@ Converting the sums to integrals (assuming a density of states \(\rho({\bf q})\)
 The time-reversed of this process can be obtained simply by exchanging the \(d-\)interaction with the \(f-\)interaction. Since the renormalisation itself is symmetric, the contribution is equal to what we obtained here. The total renormalisation in the coupling for the term \(S_f^+ S_d^-\) is therefore
 \begin{equation}\begin{aligned}
 	\frac{\Delta J}{\Delta D} &= \frac{1}{2}J_f J_d \int_{UV} d{\bf q} ~\rho({\bf q}) \left(G_f + G_d\right) \\
-							  &= \frac{1}{2}J_f J_d \int_{UV} d{\bf q} ~\rho({\bf q}) \left[\frac{1}{\omega - \frac{1}{2}\left[\epsilon_f(q_+) - \epsilon_f(q_-)\right] + \frac{1}{2}J_f + W_f} + \frac{1}{\omega - \frac{1}{2}\left[\epsilon_d(q_+) - \epsilon_d(q_-)\right] + \frac{1}{2}J_d + W_d}\right]
+							  &= \frac{1}{2}J_f J_d \int_{UV} d{\bf q} ~\rho({\bf q}) \left[\frac{1}{\omega - \frac{1}{2}\left[\epsilon_f(q_+) - \epsilon_f(q_-)\right] + \frac{1}{2}J_f + W_f - \frac{1}{4}J} + \frac{1}{\omega - \frac{1}{2}\left[\epsilon_d(q_+) - \epsilon_d(q_-)\right] + \frac{1}{2}J_d + W_d - \frac{1}{4}J}\right]
 \end{aligned}\end{equation}
 
 
