@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2026/dev/Arch Linux) (preloaded format=xelatex 2025.9.2)  22 OCT 2025 10:37
+This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2026/dev/Arch Linux) (preloaded format=xelatex 2025.9.2)  22 OCT 2025 19:43
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -452,40 +452,36 @@ Overfull \hbox (40.43216pt too wide) detected at line 199
  []
 
 [5] [6]
-Overfull \hbox (7.88597pt too wide) detected at line 290
-[][][][][]
- []
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 291.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 292.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\infty' on input line 292.
+(hyperref)                removing `\infty' on input line 291.
 
 File: bilayerHubbard.pdf Graphic file (type pdf)
 <use bilayerHubbard.pdf>
 
-Overfull \hbox (10.0pt too wide) in paragraph at lines 293--294
+Overfull \hbox (10.0pt too wide) in paragraph at lines 292--293
 [][] 
  []
 
-(./PAMNotes.bbl) [7] [8] (./PAMNotes.aux)
+[7] (./PAMNotes.bbl) [8] (./PAMNotes.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
 Package rerunfilecheck Info: File `PAMNotes.out' has not changed.
-(rerunfilecheck)             Checksum: 548482E370315D30CE42449F8C81F26E;3183.
+(rerunfilecheck)             Checksum: 1F1098298359E98CDA6A58AAEACCFFE5;3561.
  ) 
 Here is how much of TeX's memory you used:
  11854 strings out of 475848
  175094 string characters out of 5776014
- 615991 words of memory out of 5000000
+ 616379 words of memory out of 5000000
  34635 multiletter control sequences out of 15000+600000
  568665 words of font info for 80 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
  72i,14n,79p,867b,388s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on PAMNotes.xdv (8 pages, 141172 bytes).
+Output written on PAMNotes.xdv (8 pages, 155576 bytes).

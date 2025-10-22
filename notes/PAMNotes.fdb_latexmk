@@ -1,18 +1,18 @@
 # Fdb version 4
-["bibtex PAMNotes"] 1761109589.91252 "PAMNotes.aux" "PAMNotes.bbl" "PAMNotes" 1761109630.25443 0
-  "./PAMNotesNotes.bib" 1761109629.80304 104 4d8bb863c86f3d7b03a471e9d4707f34 ""
+["bibtex PAMNotes"] 1761124244.48512 "PAMNotes.aux" "PAMNotes.bbl" "PAMNotes" 1761142386.1268 0
+  "./PAMNotesNotes.bib" 1761142385.65592 104 4d8bb863c86f3d7b03a471e9d4707f34 ""
   "/usr/share/texmf-dist/bibtex/bst/revtex/apsrev4-2.bst" 1755987285 69609 e9dea59f0e753ccda3ddc8f5806d846d ""
-  "PAMNotes.aux" 1761109629.79534 2794 2d7ce21195cc595f0904c2c58425e333 "xelatex"
+  "PAMNotes.aux" 1761142385.654 2953 3760ad4d908b35da9881dcd21e2bd05e "xelatex"
   (generated)
   "PAMNotes.bbl"
   "PAMNotes.blg"
   (rewritten before read)
-["xdvipdfmx"] 1761109630.00016 "PAMNotes.xdv" "PAMNotes.pdf" "PAMNotes" 1761109630.25856 0
-  "PAMNotes.xdv" 1761109629.80341 141172 0869dfecc4960249d4f518e407ebf61c "xelatex"
+["xdvipdfmx"] 1761142385.869 "PAMNotes.xdv" "PAMNotes.pdf" "PAMNotes" 1761142386.13072 0
+  "PAMNotes.xdv" 1761142385.65592 155576 373e7540ac9baef4bec698117e1544bf "xelatex"
   (generated)
   "PAMNotes.pdf"
   (rewritten before read)
-["xelatex"] 1761109629.20104 "PAMNotes.tex" "PAMNotes.xdv" "PAMNotes" 1761109630.25477 0
+["xelatex"] 1761142385.04862 "PAMNotes.tex" "PAMNotes.xdv" "PAMNotes" 1761142386.12714 0
   "/usr/share/texmf-dist/fonts/map/fontname/texfonts.map" 1755987285 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texmf-dist/fonts/tfm/adobe/zapfding/pzdr.tfm" 1755987285 1528 f853c4d1b4e0550255e02831fdc8496f ""
   "/usr/share/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy5.tfm" 1755987285 1120 1e8878807317373affa7f7bba4cf2f6a ""
@@ -100,10 +100,10 @@
   "/usr/share/texmf-dist/tex/latex/url/url.sty" 1755987285 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
   "/usr/share/texmf-dist/web2c/texmf.cnf" 1755987285 42087 b0f9697c952c8f5a8eede4134282cb0d ""
   "/var/lib/texmf/web2c/xetex/xelatex.fmt" 1756820974 4491647 d4afde12c59d2d5ab079b85aa32cec36 ""
-  "PAMNotes.aux" 1761109629.79534 2794 2d7ce21195cc595f0904c2c58425e333 "xelatex"
-  "PAMNotes.bbl" 1761109589.97199 1980 28c19e8c34138b62d4af8c2d0ed844b0 "bibtex PAMNotes"
-  "PAMNotes.out" 1761109629.80241 3183 548482e370315d30ce42449f8c81f26e "xelatex"
-  "PAMNotes.tex" 1761109628.8354 32843 73ac19124306f86791882ab0907a804b ""
+  "PAMNotes.aux" 1761142385.654 2953 3760ad4d908b35da9881dcd21e2bd05e "xelatex"
+  "PAMNotes.bbl" 1761124244.56219 1980 28c19e8c34138b62d4af8c2d0ed844b0 "bibtex PAMNotes"
+  "PAMNotes.out" 1761142385.655 3561 1f1098298359e98cda6a58aaeaccffe5 "xelatex"
+  "PAMNotes.tex" 1761142384.69323 36768 335461113059cba3b877c8121bfa3f81 ""
   "bilayerHubbard.pdf" 1761109161.10648 42647 6b6a87e6db180130deeddd55d5ff2e84 ""
   (generated)
   "PAMNotes.aux"

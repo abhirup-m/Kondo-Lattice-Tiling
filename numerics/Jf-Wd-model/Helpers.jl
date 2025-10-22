@@ -430,7 +430,6 @@ function NNNFunc(k1, k2, size_BZ)
         return 0.5 * cos((k1x - k2x + k1y - k2y) / √2) + 0.5 * cos((k1x - k2x - k1y + k2y) / √2)
     end
 end
-
 function NNFunc(k1, k2, size_BZ) 
     if isnothing(k1)
         return 1.
@@ -438,57 +437,4 @@ function NNFunc(k1, k2, size_BZ)
         (k1x, k1y), (k2x, k2y) = map1DTo2D([k1, k2], size_BZ)
         return 0.5 * cos(k1x - k2x) + 0.5 * cos(k1y - k2y)
     end
-end
-
-
-function initialiseKondoJ(
-        size_BZ::Int64, 
-        num_steps::Int64,
-        kondoF::Float64
-    )
-    # Kondo coupling must be stored in a 3D matrix. Two of the dimensions store the 
-    # incoming and outgoing momentum indices, while the third dimension stores the 
-    # behaviour along the RG flow. For example, J[i][j][k] reveals the value of J 
-    # for the momentum pair (i,j) at the k^th Rg step.
-    kondoJArray = Array{Float64}(undef, size_BZ^2, size_BZ^2)
-    k1x_vals, k1y_vals = map1DTo2D(collect(1:size_BZ^2), size_BZ)
-    kondoJArray[:, :] .= 0.5 * kondoF .* (cos.(k1x_vals' .- k1x_vals) .+ cos.(k1y_vals' .- k1y_vals))
-    return kondoJArray
-end
-
-
-function getCutOffEnergy(size_BZ)
-    kx_pos_arr = [kx for kx in range(K_MIN, K_MAX, length=size_BZ) if kx >= 0]
-    return sort(-tightBindDisp(kx_pos_arr, 0 .* kx_pos_arr), rev=true)
-end
-
-
-function highLowSeparation(
-        dispersionArray,
-        energyCutoff,
-        proceedFlags,
-        size_BZ
-    )
-
-    # get the k-points that will be decoupled at this step, by getting the isoenergetic contour at the cutoff energy.
-    cutoffPoints = unique(getIsoEngCont(dispersionArray, energyCutoff))
-    cutoffHolePoints = particleHoleTransf(cutoffPoints, size_BZ)
-
-    # these cutoff points will no longer participate in the RG flow, so disable their flags
-    for key in ["d", "f"]
-        proceedFlags[key][[cutoffPoints; cutoffHolePoints]] .= 0
-        proceedFlags[key][[cutoffPoints; cutoffHolePoints]] .= 0
-    end
-
-    # get the k-space points that need to be tracked for renormalisation, by getting the states 
-    # below the cutoff energy. We only take points within the lower left quadrant, because the
-    # other quadrant is obtained through symmetry relations.
-    @time innerIndices = Dict(key => [
-                                point for (point, energy) in enumerate(dispersionArray) if
-                                abs(energy) < (abs(energyCutoff) - TOLERANCE)
-                                && proceedFlags[key][point] > 0
-                               ]
-                        for key in ["f", "d"]
-                       )
-    return innerIndices, cutoffPoints, cutoffHolePoints, proceedFlags
 end
