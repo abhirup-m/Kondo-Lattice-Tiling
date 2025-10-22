@@ -11,6 +11,9 @@
 # tolerance for identifying energy contours
 (@isdefined TOLERANCE) || const TOLERANCE = 1e-8
 
+# tolerance for identifying RG fixed points
+(@isdefined RG_TOL) || const RG_TOL = 1e-4
+
 (@isdefined GLOBALFIELD) || const GLOBALFIELD = 1e-5
 
 # overlap integral 't' set to 1
@@ -29,6 +32,14 @@
 (@isdefined PLOT_SIZE) || const PLOT_SIZE = (400, 300)
 (@isdefined ASPECT) || const ASPECT = PLOT_SIZE[2] / PLOT_SIZE[1]
 
+(@isdefined AXES_LABELS) || const AXES_LABELS = Dict(
+                                                     "epsilonF" => "\\varepsilon_f", 
+                                                     "kondoF" => "J_f", 
+                                                     "kondoPerp" => "J", 
+                                                     "Wf" => "W_f", 
+                                                     "W" => "W", 
+                                                     "lightBandFactor" => "t/t_f", 
+                                                     "mu_c" => "μ_c",                                )
 # for testing. 
 (@isdefined SIZE_BZ) || const SIZE_BZ = [5, 101, 1001]
 (@isdefined KX_VALUES) || const KX_VALUES = [K_MIN, K_MAX, K_MIN, K_MAX, 0]

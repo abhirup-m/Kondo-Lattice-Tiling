@@ -294,47 +294,18 @@ end
 
 
 function Fourier(
-        fermSurfKondoChannels::Vector{Array{Float64, 2}};
-        shellPointsChannels::Union{Nothing, Vector{Vector{Int64}}}=nothing,
-        calculateFor::Union{Nothing, Vector{Int64}}=nothing,
+        kondoJMomentum::Matrix{Float64},
+        kvals::Vector{Float64},
     )
-    numPoints = size(fermSurfKondoChannels[1])[1] |> sqrt |> Int
-    if isnothing(calculateFor)
-        calculateFor = 1:numPoints^2
+
+    kondoJReal = 0 * kondoJMomentum
+    for r1 in 0:(size(kondoJReal)[1]-1)
+        for r2 in r1:(size(kondoJReal)[1]-1)
+            cosk1r1minusk2r2= cos.(r1 .* kVals' .- r2 .* kVals[kVals .≥ 0])
+            kondoJReal[r1, r2] = sum(kondoJMomentum[:, momentumVals .≥ 0] .* cosk1r1minusk2r2)
+        end
     end
-    realKondoChannels = Matrix{Float64}[]
-    kondoTemp = nothing
-    for (channel, kondoJArray) in enumerate(fermSurfKondoChannels)
-        if isnothing(shellPointsChannels)
-            integrateOver = 1:numPoints^2
-        else
-            integrateOver = shellPointsChannels[channel]
-        end
-        kondoJRealSpace = 0 .* kondoJArray
-        @showprogress Threads.@threads for p1 in calculateFor
-            for p2 in calculateFor
-                r1, r2 = [map1DTo2D(p, numPoints) * 0.5 * numPoints / π for p in [p1, p2]]
-                p1_neg, p2_neg = (map2DTo1D((-1 .* r1)..., numPoints), map2DTo1D((-1 .* r2)..., numPoints))
-                if (p1_neg, p2_neg) ∈ keys(kondoJRealSpace)
-                    kondoJRealSpace[p1, p2] = kondoJRealSpace[p1_neg, p2_neg]
-                else
-                    kondoJRealSpace[p1, p2] = sum([kondoJArray[k1, k2] * cos(sum(r1 .* map1DTo2D(k1, numPoints)) - sum(r2 .* map1DTo2D(k2, numPoints)))
-                                                            for (k1, k2) in Iterators.product(integrateOver, integrateOver)])
-                end
-                kondoJRealSpace[p2, p1] = kondoJRealSpace[p1, p2]
-            end
-        end
-        kondoTemp = maximum(kondoJRealSpace)
-        if maximum(kondoJRealSpace) > 1
-            kondoJRealSpace .*= 1.0 / maximum(kondoJRealSpace)
-        end
-        if maximum(kondoJRealSpace) < 0.3
-            kondoJRealSpace .*= 0.3 / maximum(kondoJRealSpace)
-        end
-        push!(realKondoChannels, kondoJRealSpace)
-        #=push!(realKondoChannels, kondoJRealSpace ./ length(integrateOver))=#
-    end
-    return realKondoChannels, kondoTemp
+    return kondoJReal
 end
 
 
@@ -381,4 +352,89 @@ end
 
 function FillIn(limits)
     return collect(limits[1]:limits[2]:limits[3])
+end
+
+
+function Resilient(
+        func::Function,
+        args...;
+        maxTries::Int=1,
+        numProcs::Int=10,
+        kwargs...
+    )
+
+    retries = 0
+    while retries < maxTries
+        try
+            if nprocs() == 1 && numProcs > 1
+                addprocs(numProcs)
+            end
+            println("Using $(nprocs()) processes and $(Threads.nthreads()) threads. $(retries) retries.")
+
+            @everywhere submitDir = pwd() * "/"
+            @everywhere if "SLURM_SUBMIT_DIR" in keys(ENV)
+                submitDir = ENV["SLURM_SUBMIT_DIR"] * "/"
+            end
+
+            @everywhere include(submitDir * "Constants.jl")
+            @everywhere include(submitDir * "Helpers.jl")
+            @everywhere include(submitDir * "RgFlow.jl")
+            @everywhere include(submitDir * "Models.jl")
+            @everywhere include(submitDir * "PhaseDiagram.jl")
+            @everywhere include(submitDir * "Probes.jl")
+            @everywhere include(submitDir * "PltStyle.jl")
+
+            func(args...; kwargs...)
+            break
+        catch e
+            showerror(stdout, e)
+            if nprocs() > 1
+                rmprocs(2:nprocs())
+            end
+            retries += 1
+        end
+    end
+end
+
+
+function ExtendedSaveName(
+        couplings::Dict{String, Vector{Float64}},
+    )
+    couplingNames = ["epsilonF", "W", "Wf", "kondoPerp", "kondoF", "lightBandFactor", "mu_c"]
+    components = []
+    for name in couplingNames
+        if length(couplings[name]) == 3
+            push!(components, join(couplings[name], "-"))
+        else
+            push!(components, join((couplings[name][1], 0., couplings[name][1]), "-"))
+        end
+    end
+    return join(components, "-")
+end
+
+
+function ExtendedSaveName(
+        couplings::Dict{String, Float64},
+    )
+    couplingNames = ["epsilonF", "W", "Wf", "kondoPerp", "kondoF", "lightBandFactor", "mu_c"]
+    saveName = join([couplings[name] for name in couplingNames], "-")
+    return saveName
+end
+
+
+function NNNFunc(k1, k2, size_BZ) 
+    if isnothing(k1)
+        return 1.
+    else
+        (k1x, k1y), (k2x, k2y) = map1DTo2D([k1, k2], size_BZ)
+        return 0.5 * cos((k1x - k2x + k1y - k2y) / √2) + 0.5 * cos((k1x - k2x - k1y + k2y) / √2)
+    end
+end
+function NNFunc(k1, k2, size_BZ) 
+    if isnothing(k1)
+        return 1.
+    else
+        (k1x, k1y), (k2x, k2y) = map1DTo2D([k1, k2], size_BZ)
+        return 0.5 * cos(k1x - k2x) + 0.5 * cos(k1y - k2y)
+    end
 end

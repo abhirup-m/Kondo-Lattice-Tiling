@@ -1,3 +1,5 @@
+using ProgressMeter
+
 @everywhere function PoleFraction(
         size_BZ::Int64,
         couplings::Dict{String, Float64};
@@ -167,4 +169,59 @@ function PhaseDiagram(
     end
 
     return phaseDiagram_Jf, phaseDiagram_J
+end
+
+@everywhere function FixedPointVals(
+        size_BZ::Int64,
+        couplings::Dict{String, Float64};
+        loadData::Bool=false,
+    )
+    kondoJArray, kondoPerpArray, dispersion = momentumSpaceRG(size_BZ, couplings; saveData=true, loadData=false)
+    fermiPoints = unique(getIsoEngCont(dispersion, 0.0))
+    @assert length(fermiPoints) == 2 * size_BZ - 2
+    @assert all(==(0), dispersion[fermiPoints])
+    averageKondoScale = sum(abs.(kondoJArray[:, :, 1])) / length(kondoJArray[:, :, 1])
+    @assert averageKondoScale > RG_RELEVANCE_TOL
+    kondoJArray[:, :, end] .= ifelse.(abs.(kondoJArray[:, :, end]) ./ averageKondoScale .> RG_RELEVANCE_TOL, kondoJArray[:, :, end], 0)
+    scattProbBool = ScattProb(size_BZ, kondoJArray, dispersion)[2]
+    polesFraction = count(>(0),scattProbBool[fermiPoints]) / length(fermiPoints)
+    return Dict("Jf-max" => maximum(abs.(kondoJArray[fermiPoints, fermiPoints, end])), "J" => kondoPerpArray[end], "f-pf" => polesFraction)
+end
+
+function PhaseDiagram(
+        size_BZ::Int64,
+        kondoPerpVals::Vector{Float64},
+        WfVals::Vector{Float64},
+        couplings::Dict{String, Float64};
+        loadData::Bool=false,
+        fillPG::Bool=false,
+    )
+
+    phaseDiagram_Jf = fill(0., (length(kondoPerpVals), length(WfVals)))
+    phaseDiagram_J = fill(0., (length(kondoPerpVals), length(WfVals)))
+    poleFraction = fill(0., (length(kondoPerpVals), length(WfVals)))
+    Wcrit = Any[nothing for _ in kondoPerpVals]
+    Wpg = Any[nothing for _ in kondoPerpVals]
+    fixedPointData = @showprogress pmap(p -> FixedPointVals(size_BZ, merge(couplings, Dict("kondoPerp" => p[1], "Wf" => p[2])); loadData=loadData), Iterators.product(kondoPerpVals, WfVals))
+    for ((maxJf, J, pf), (i, j)) in zip(fixedPointData, Iterators.product(eachindex(kondoPerpVals), eachindex(WfVals)))
+        phaseDiagram_Jf[i, j] = maxJf
+        phaseDiagram_J[i, j] = J
+        poleFraction[i, j] = pf
+    end
+    function transitionLocator(i, j, type)
+        c1 = count(==(1), poleFraction[i, [j-1, j, j+1]])
+        c2 = count(p -> p<1 && p>0, poleFraction[i, [j-1, j, j+1]])
+        c3 = count(==(0), poleFraction[i, [j-1, j, j+1]])
+        if type == "PG"
+            return c1 > 0 && c2 > 0
+        else
+            return c2 > 0 && c3 > 0
+        end
+    end
+    for i in eachindex(kondoPerpVals)
+        Wpg[i] = findfirst(j -> transitionLocator(i, j, "PG"), eachindex(WfVals)[2:end-1])
+        Wcrit[i] = findfirst(j -> transitionLocator(i, j, "C"), eachindex(WfVals)[2:end-1])
+    end
+
+    return phaseDiagram_Jf, phaseDiagram_J, poleFraction, Wpg, Wcrit
 end

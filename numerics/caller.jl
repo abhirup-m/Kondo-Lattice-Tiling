@@ -1,40 +1,33 @@
-using Distributed, Combinatorics, Serialization, PDFmerger, PyPlot, CodecZlib
-using Fermions
+#!/bin/env julia-beta
+#SBATCH --job-name=SC25                     # Job name
+#SBATCH --output=job.%J.out                    # Standard output file
+#SBATCH --error=job.%J.err                     # Standard error file
+#SBATCH --partition=hm                         # Partition or queue name
+#SBATCH --nodes=3                              # Number of nodes
+#SBATCH --ntasks-per-node=48                   # Number of tasks per node
+#SBATCH --ntasks=144                           # Total Number of tasks
+#SBATCH --time=24:00:00                        # Maximum runtime (D-HH:MM:SS)
 
-@everywhere using FileIO, JSON3, LinearAlgebra, ProgressMeter, JLD2
+ENV["PYCALL_GC_FINALIZE"] = "0"
+using Distributed, SlurmClusterManager, PDFmerger, Fermions, ProgressMeter, PyPlot
+if "SLURM_SUBMIT_DIR" in keys(ENV)
+    addprocs(SlurmManager())
+end
 
-@everywhere include("Constants.jl")
-@everywhere include("Helpers.jl")
-@everywhere include("RgFlow.jl")
-@everywhere include("Models.jl")
-include("PhaseDiagram.jl")
-include("Probes.jl")
-include("PltStyle.jl")
+global impU = 0.
 
-global kondoF = 0.1
-global kondoPerp = 0.0
-global lightBandFactor = 2.
-global epsilonF = -2 * HOP_T
-global mu_c = 0.2 * HOP_T
-global W = 0.5 * HOP_T
-maxSize = 1000
-WmaxSize = 500
+@everywhere submitDir = pwd() * "/"
+@everywhere if "SLURM_SUBMIT_DIR" in keys(ENV)
+    submitDir = ENV["SLURM_SUBMIT_DIR"] * "/"
+end
 
-@everywhere NiceValues(size_BZ) = Dict{Int64, Vector{Float64}}(
-                         13 => -1.0 .* [0., 1., 1.5, 1.55, 1.6, 1.61] ./ size_BZ,
-                         41 => -1.0 .* [0, 3.5, 7.13, 7.3, 7.5, 7.564, 7.6, 8.] ./ size_BZ,
-                         77 => -1.0 .* [0., 7., 14.04, 14.6, 14.99, 15.0] ./ size_BZ,
-                        )[size_BZ]
-@everywhere pseudogapStart(size_BZ) = Dict{Int64, Float64}(
-                         13 => -1.0 * 1.5 / size_BZ,
-                         41 => -1.0 * 7.13 / size_BZ,
-                         77 => -1.0 * 14.04 / size_BZ,
-                        )[size_BZ]
-@everywhere pseudogapEnd(size_BZ) = Dict{Int64, Float64}(
-                         13 => -1.0 * 1.6 / size_BZ,
-                         41 => -1.0 * 7.564 / size_BZ,
-                         77 => -1.0 * 14.99 / size_BZ,
-                        )[size_BZ]
+@everywhere include(submitDir * "Constants.jl")
+@everywhere include(submitDir * "Helpers.jl")
+@everywhere include(submitDir * "RgFlow.jl")
+@everywhere include(submitDir * "Models.jl")
+@everywhere include(submitDir * "PhaseDiagram.jl")
+@everywhere include(submitDir * "Probes.jl")
+@everywhere include(submitDir * "PltStyle.jl")
 
 function RGFlow(
         Wf_arr::Vector{Float64},
@@ -69,190 +62,215 @@ function RGFlow(
 end
 
 
+function ScattProb(
+        size_BZ::Int64,
+        couplingsRange::Dict{String, Vector{Float64}}, 
+        axLab::Vector{String};
+        loadData::Bool=false,
+    )
+    nonAxLabs = sort([k for k in keys(couplingsRange) if k ∉ axLab])
+    basicCouplings = Dict{String, Float64}(k => v[1] for (k, v) in couplingsRange if length(v) == 1)
+    basicCouplings["omega_by_t"] = OMEGA_BY_t
+    basicCouplings["impU"] = impU
+    rangedCouplings = Dict{String, Vector{Float64}}(k => FillIn(v) for (k, v) in couplingsRange if length(v) == 3)
+    parameterSpace = Iterators.product([rangedCouplings[ax] for ax in axLab]...)
+    paths = String[]
+    for couplings in parameterSpace
+        allCouplings = merge(basicCouplings, Dict(axLab .=> couplings))
+        kondoJArray, kondoPerpArray, dispersion = momentumSpaceRG(size_BZ, allCouplings; loadData=loadData, saveData=true)
+
+        averageKondoScale = sum(abs.(kondoJArray[:, :, 1])) / length(kondoJArray[:, :, 1])
+        @assert averageKondoScale > RG_RELEVANCE_TOL
+        kondoJArray[:, :, end] .= ifelse.(abs.(kondoJArray[:, :, end]) ./ averageKondoScale .> RG_RELEVANCE_TOL, kondoJArray[:, :, end], 0)
+        kondoJArray[abs.(dispersion) .> 0.2 * HOP_T, :, end] .= 0
+        kondoJArray[:, abs.(dispersion) .> 0.2 * HOP_T, end] .= 0
+
+        node = map2DTo1D(π/2, π/2, size_BZ)
+        antinode = map2DTo1D(π/1, 0., size_BZ)
+        fig, ax = plt.subplots(ncols=2, figsize=(16, 6))
+        hm1 = ax[1].imshow(reshape(kondoJArray[node, :, end], size_BZ, size_BZ)', origin="lower")
+        hm2 = ax[2].imshow(reshape(kondoJArray[antinode, :, end], size_BZ, size_BZ)', origin="lower")
+        fig.colorbar(hm1)
+        fig.colorbar(hm2)
+        push!(paths, "SP-$(size_BZ)-" * ExtendedSaveName(allCouplings) * ".pdf")
+        fig.savefig(paths[end])
+    end
+    merge_pdfs(paths, "SP.pdf", cleanup=true)
+end
+
+
 function PhaseDiagram(
         size_BZ::Int64,
-        kondoFRange::NTuple{3, Float64},
-        WfRange::NTuple{3, Float64},
-        kondoPerpRange::NTuple{3, Float64},
-        WRange::NTuple{3, Float64};
+        couplingsRange::Dict{String, Vector{Float64}}, 
+        axLab::Vector{String},
+        cbarLabels;
         loadData::Bool=false,
-        fillPG::Bool=false,
     )
-    @assert minimum(kondoPerpRange) > 0
-    @assert minimum(kondoFRange) > 0
-    #=epsilonF = 0.0 * HOP_T=#
-    #=mu_c = 0.0 * HOP_T=#
-    #=kondoPerpVals = (0.05:0.2:0.65) .* HOP_T=#
-    #=W_arr = (0.0:-0.2:-0.6) .* HOP_T=#
-    WfVals, WVals, kondoPerpVals, kondoFVals = FillIn.((WfRange, WRange, kondoPerpRange, kondoFRange))
+    nonAxLabs = sort([k for k in keys(couplingsRange) if k ∉ axLab])
+    basicCouplings = Dict{String, Float64}(k => v[1] for (k, v) in couplingsRange if length(v) == 1)
+    basicCouplings["omega_by_t"] = OMEGA_BY_t
+    basicCouplings["impU"] = impU
+    rangedCouplings = Dict{String, Vector{Float64}}(k => FillIn(v) for (k, v) in couplingsRange if length(v) == 3)
+    parameterSpace = Iterators.product([rangedCouplings[ax] for ax in axLab]...)
+    saveName = "PD-$(size_BZ)-" * ExtendedSaveName(couplingsRange)
 
-    fig, axes = PyPlot.subplots(nrows=length(kondoFVals), ncols=length(WVals), figsize=(8 * length(WVals), 6 * length(kondoFVals)))
-    for (i, kondoF) in enumerate(kondoFVals)
-        for (j, W) in enumerate(WVals)
-            phaseDiagram_Jf, phaseDiagram_J = PhaseDiagram(size_BZ, kondoPerpVals, WfRange, 
-                                                           Dict("omega_by_t"=>OMEGA_BY_t, "W"=>W, "kondoF"=>kondoF, 
-                                        "epsilonF"=>epsilonF, "mu_c"=>mu_c, "lightBandFactor"=>lightBandFactor);
-                                   loadData=loadData, fillPG=fillPG
-                                  )
-            hmap = axes[i,j].imshow(phaseDiagram_Jf, aspect="auto", origin="lower", 
-                                    extent=(WfRange[1],
-                                            WfRange[3],
-                                            kondoPerpRange[1],
-                                            kondoPerpRange[3],
-                                           ),
-                                    cmap = matplotlib.colors.ListedColormap(plt.get_cmap(CMAP)(60:220)),
-                                   )
-            for i in 1:length(kondoPerpVals)
-                if i % 10 ≠ 0
-                    phaseDiagram_J[i, :] .= 0
-                    continue
-                end
-                phaseDiagram_J[i,((1:length(WfVals)) .% 10) .≠ 0] .= 0
-            end
-            colors = ["black", "midnightblue", "purple"]
-            markers = ["x", ".", "P"]
-            for flag in [1, 2, 3]
-                pairs = findall(==(flag), phaseDiagram_J)
-                axes[i,j].scatter([WfVals[p[2]] for p in pairs], [kondoPerpVals[p[1]] for p in pairs], marker=markers[flag], color=colors[flag], s=150)
-            end
-
-            if j == 1
-                axes[i, 1].set_ylabel(L"J")
-                axes[i, j].text(-0.45, 0.5, "\$J_f=$(round(kondoF, digits=2))\$", horizontalalignment="center", verticalalignment="center", transform=axes[i,j].transAxes, bbox=Dict("facecolor"=>"red", "alpha"=>0.1, "boxstyle"=>"Round,pad=0.2"))
-            end
-            if i == 1
-                axes[i, j].text(0.5, 1.2, "\$W=$(round(W, digits=2))\$", horizontalalignment="center", verticalalignment="center", transform=axes[i,j].transAxes, bbox=Dict("facecolor"=>"red", "alpha"=>0.1, "boxstyle"=>"Round,pad=0.2"))
-            end
-            if i == length(kondoPerpVals)
-                axes[length(kondoPerpVals), j].set_xlabel(L"W_f")
-            end
+    heatmapF = Dict{NTuple{4, Float64}, Float64}()
+    heatmapS = Dict{NTuple{4, Float64}, Float64}()
+    try
+        if !loadData
+            @assert false
         end
+        loadedData = JSON3.read(read(joinpath(SAVEDIR, saveName * "-f.json"), String), Dict{String, Any})
+        for (k, v) in loadedData
+            heatmapF[eval(Meta.parse(k))] = v
+        end
+        loadedData = JSON3.read(read(joinpath(SAVEDIR, saveName * "-s.json"), String), Dict{String, Any})
+        for (k, v) in loadedData
+            heatmapS[eval(Meta.parse(k))] = v
+        end
+    catch e
+
+        combinedResults = @showprogress pmap(couplings -> FixedPointVals(
+                                                                         size_BZ,
+                                                                         merge(basicCouplings, Dict(axLab .=> couplings));
+                                                                         loadData=loadData,
+                                                        ),
+                                             parameterSpace
+                                            )
+
+        for (index, key) in enumerate(parameterSpace)
+            heatmapF[key] = abs(combinedResults[index]["f-pf"])
+            heatmapS[key] = abs(combinedResults[index]["J"])
+        end
+        open(joinpath(SAVEDIR, saveName * "-f.json"), "w") do file JSON3.write(file, heatmapF) end
+        open(joinpath(SAVEDIR, saveName * "-s.json"), "w") do file JSON3.write(file, heatmapS) end
     end
-    fig.tight_layout()
-    savefig("PD-$(size_BZ)-$(epsilonF)-$(mu_c)-$(lightBandFactor).pdf", bbox_inches="tight"); PyPlot.close()
+    suptitle = latexstring(join(["$(AXES_LABELS[lab])=$(couplingsRange[lab][1])" for lab in nonAxLabs], ", "))
+    return HM4D(heatmapF, heatmapS, rangedCouplings, axLab, saveName, cbarLabels, suptitle)
 end
 
-function AuxiliaryMomentumCorrelations(
+function AuxiliaryCorrelations(
         size_BZ::Int64,
         maxSize::Int64,
-        kondoFRange::NTuple{3, Float64},
-        WfRange::NTuple{3, Float64},
-        kondoPerpRange::NTuple{3, Float64},
-        WRange::NTuple{3, Float64};
+        couplingsRange::Dict{String, Vector{Float64}}, 
+        axLab::Vector{String},
+        cbarLabels::Dict{},
+        saveNamePrefix::String;
         loadData::Bool=false,
     )
+    nonAxLabs = sort([k for k in keys(couplingsRange) if k ∉ axLab])
+    suptitle = latexstring(join(["$(AXES_LABELS[lab])=$(couplingsRange[lab][1])" for lab in nonAxLabs], ", "))
+    basicCouplings = Dict{String, Float64}(k => v[1] for (k, v) in couplingsRange if length(v) == 1)
+    basicCouplings["omega_by_t"] = OMEGA_BY_t
+    basicCouplings["impU"] = impU
+    rangedCouplings = Dict{String, Vector{Float64}}(k => FillIn(v) for (k, v) in couplingsRange if length(v) == 3)
+    parameterSpace = Iterators.product([rangedCouplings[ax] for ax in axLab]...)
 
-    WfVals, WVals, kondoPerpVals, kondoFVals = FillIn.((WfRange, WRange, kondoPerpRange, kondoFRange))
+    node = map2DTo1D(π/2, π/2, size_BZ)
+    antinode = map2DTo1D(3π/4, π/4, size_BZ)
+    #=microCorrelation = Dict(=#
+    #=                    "SF-d0-f" => ("f", (k1, k2, points) -> k1 ≥ k2, (i, j, k1, k2; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor * NNFunc(k1, k2, size_BZ) / 4), ("+-+-", [2, 1, i, j+1], 3 * factor * NNFunc(k1, k2, size_BZ) / 4)]),=#
+    #=                    "SF-d0-N" => ("f", (k1, k2, points) -> k1 == node && k2 == node, (i, j, k1, k2; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),=#
+    #=                    "SF-d0-AN" => ("f", (k1, k2, points) -> k1 == antinode && k2 == antinode, (i, j, k1, k2; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),=#
+    #=                    "SF-d0-s" => ("s", nothing, (i, j; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),=#
+    #=                    "Sdz" => ("i", nothing, [("n", [1], 0.5), ("n", [2], -0.5)]),=#
+    #=                   )=#
+    microCorrelation = Dict(
+                        "SF-dk1k1-f" => ("f", (k1, k2, points) -> k1 ≥ k2, (i, j, k1, k2; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),
+                        "SF-d0-s" => ("s", nothing, (i, j; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),
+                        "Sdz" => ("i", nothing, [("n", [1], 0.5), ("n", [2], 0.5)]),
+                       )
+            
+    dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
+    northEastFermiPoints = filter(p -> all(map1DTo2D(p, size_BZ) .≥ 0), getIsoEngCont(dispersion, 0.0))
+    @assert issorted(northEastFermiPoints)
+    combinedResults = @showprogress pmap(couplings -> AuxiliaryCorrelations(size_BZ,
+                                                      merge(basicCouplings, Dict(axLab .=> couplings)),
+                                                      microCorrelation,
+                                                      northEastFermiPoints,
+                                                      maxSize;
+                                                      loadData=loadData,
+                                                    ),
+                                         parameterSpace
+                                        )
 
-    parameterSpace = Iterators.product(WfVals, kondoPerpVals, WVals, kondoFVals)
-    results = @distributed vcat for (Wf, kondoPerp, W, kondoF) in parameterSpace |> collect
-        couplings = Dict("omega_by_t" => OMEGA_BY_t,
-                         "W"=>W,
-                         "Wf"=>Wf,
-                         "kondoF"=>kondoF, 
-                         "kondoPerp"=>kondoPerp, 
-                         "epsilonF"=> epsilonF,
-                         "mu_c"=> mu_c,
-                         "lightBandFactor"=>lightBandFactor
-                        )
-        correlations = Dict(
-                            "SF-dkk" => (1, (i, j) -> [("+-+-", [1, 2, i+1, j], 0.25), ("+-+-", [2, 1, i, j+1], 0.25)]),
-                           )
-        results = AuxiliaryMomentumCorrelations(size_BZ, couplings, correlations, maxSize; loadData=loadData, silent=true)
-        kspaceResult = sum([v for (k,v) in results if k ≠ "SF-dkk-0-0"]) / length(filter(≠("SF-dkk-0-0"), keys(results)))
-        zeroSiteResult = results["SF-dkk-0-0"] / length(filter(≠("SF-dkk-0-0"), keys(results)))
-        [(kspaceResult, zeroSiteResult),]
-    end
-
-    kspaceResults = Dict(parameters => 0. for parameters in parameterSpace)
-    zeroSiteResults = Dict(parameters => 0. for parameters in parameterSpace)
-    for (key, (kspaceResult, zeroSiteResult)) in zip(parameterSpace, results)
-        kspaceResults[key] = kspaceResult
-        zeroSiteResults[key] = zeroSiteResult
-    end
-
-    fig, axes = plt.subplots(nrows=length(kondoFVals), ncols=length(WVals), figsize=(16 * length(kondoFVals), 8 * length(WVals)))
-    fig.tight_layout()
-    for ((row, kondoF), (col, W)) in Iterators.product(enumerate.((kondoFVals, WVals))...)
-        kspaceResult = zeros(length(kondoPerpVals), length(WfVals))
-        zeroSiteResult = zeros(length(kondoPerpVals) * length(WfVals))
-        for ((y, kondoPerp), (x, Wf)) in Iterators.product(enumerate.((kondoPerpVals, WfVals))...)
-            key = (Wf, kondoPerp, W, kondoF)
-            kspaceResult[y, x] = kspaceResults[key]
-            zeroSiteResult[y * (length(WfVals) - 1) + x] = zeroSiteResults[key]
-        end
-        if length(kondoFVals) * length(WVals) > 1
-            ax = axes[row, col]
-        else
-            ax = axes
-        end
-        zeroSiteResult = abs.(zeroSiteResult)
-        kspaceResult = abs.(kspaceResult)
-        if length(zeroSiteResult[zeroSiteResult .> 0]) > 0
-            zeroSiteResult[zeroSiteResult .== 0] .= minimum(zeroSiteResult[zeroSiteResult .> 0])/10
-        end
-        hm = ax.imshow(kspaceResult, extent=(minimum(WfVals), maximum(WfVals),minimum(kondoPerpVals), maximum(kondoPerpVals)), aspect="auto", cmap=matplotlib.colors.ListedColormap(plt.get_cmap(CMAP)(60:220)))
-        if length(zeroSiteResult[zeroSiteResult .> 0]) > 0
-            sc = ax.scatter(repeat(WfVals, outer=length(kondoPerpVals)), repeat(kondoPerpVals, inner=length(WfVals)), c=zeroSiteResult, cmap="tab20b", norm="log", s=100)
-        else
-            sc = ax.scatter(repeat(WfVals, outer=length(kondoPerpVals)), repeat(kondoPerpVals, inner=length(WfVals)), c=zeroSiteResult, cmap="tab20b", s=100, vmin=0, vmax=0.1)
-        end
-        cb1 = fig.colorbar(hm, shrink=0.5, pad=0.12, location="left")
-        cb1.set_label(L"\overline{\langle S_d \cdot S_k \rangle}", labelpad=-80, y=1.1, rotation="horizontal")
-        cb2 = fig.colorbar(sc, shrink=0.5, pad=0.05, location="right")
-        cb2.set_label(L"\langle S_d \cdot S_0 \rangle", labelpad=-30, y=1.2, rotation="horizontal")
-        ax.set_xlabel(L"W_f")
-        ax.set_ylabel(L"J")
-
-        colors = ["black", "midnightblue", "purple"]
-        markers = ["x", ".", "P"]
-
-        if col == 1
-            ax.text(-0.45, 0.5, "\$J_f=$(round(kondoF, digits=2))\$", horizontalalignment="center", verticalalignment="center", transform=ax.transAxes, bbox=Dict("facecolor"=>"red", "alpha"=>0.1, "boxstyle"=>"Round,pad=0.2"))
-        end
-        if row == 1
-            ax.text(0.5, 1.2, "\$W=$(round(W, digits=2))\$", horizontalalignment="center", verticalalignment="center", transform=ax.transAxes, bbox=Dict("facecolor"=>"red", "alpha"=>0.1, "boxstyle"=>"Round,pad=0.2"))
+    momentumPairs = vec(collect(Iterators.product(northEastFermiPoints, northEastFermiPoints)))
+    correlations = Dict(
+                        "SF-d0-f" => cR -> abs(sum([cR["SF-dk1k1-f"][index] * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs)])),
+                        "SF-d0-s" => cR -> abs(cR["SF-d0-s"]),
+                        "SF-dNN" => cR -> abs(sum([cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if node in (k1, k2)])),
+                        "SF-dAA" => cR -> abs(sum([cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if antinode in (k1, k2)])),
+                        "Sdz" => cR -> abs(cR["Sdz"]),
+                        "PF" => cR -> 0. + count(v -> abs(v) > 1e-5, [cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])
+                       )
+    figPaths = []
+    plottableResults = Dict(name => Dict() for name in keys(correlations))
+    for (name, func) in correlations
+        for (cR, key) in zip(combinedResults, parameterSpace)
+            plottableResults[name][key] = func(cR)
         end
     end
-    fig.savefig("auxCorr-$(size_BZ)-$(maxSize)-$(kondoF)-$(W)-$(epsilonF)-$(mu_c)-$(lightBandFactor).pdf", bbox_inches="tight")
+    saveName = "$(saveNamePrefix)-$(size_BZ)-$(maxSize)" * ExtendedSaveName(couplingsRange)
+    #=heatmapF = Dict()=#
+    #=heatmapS = Dict()=#
+    #=heatmapN = Dict()=#
+    #=heatmapA = Dict()=#
+    #=heatmapSdz = Dict()=#
+    #=heatmapPF = Dict()=#
+    #=for (index, key) in enumerate(parameterSpace)=#
+    #=    heatmapF[key] = abs(combinedResults[index]["SF-d0-f"])=#
+    #=    heatmapS[key] = abs(combinedResults[index]["SF-d0-s"])=#
+    #=    heatmapSdz[key] = abs(combinedResults[index]["Sdz"])=#
+    #=    heatmapPF[key] = abs(combinedResults[index]["PF"])=#
+    #=    heatmapN[key] = abs(combinedResults[index]["SF-dNN"])=#
+    #=    heatmapA[key] = abs(combinedResults[index]["SF-dAA"])=#
+    #=end=#
+    HM4D(plottableResults["SF-d0-f"], plottableResults["SF-d0-s"], rangedCouplings, axLab, "loc-$(saveName)", [cbarLabels["SF-d0-f"], cbarLabels["SF-d0-s"]], suptitle)
+    HM4D(plottableResults["SF-dNN"], plottableResults["SF-dAA"], rangedCouplings, axLab, "k-$(saveName)", [cbarLabels["SF-dNN"], cbarLabels["SF-dAA"]], suptitle)
+    HM4D(plottableResults["Sdz"], plottableResults["PF"], rangedCouplings, axLab, "Sdz-$(saveName)", [cbarLabels["Sdz"], cbarLabels["PF"]], suptitle)
+    Lines(Dict("PF" => plottableResults["PF"]), rangedCouplings, axLab, saveName, cbarLabels, suptitle)
+    return figPaths
 end
 
-@time AuxiliaryMomentumCorrelations(33, 100, (0.05, 0.7, 0.65), (-0.6, 0.6, -0.0), (0.01, 0.8, 0.81), (0., -0.7, -0.6); loadData=false)
+namesCorr = String[]
+namesPD = String[]
+for (kondoF, U) in Iterators.product([0.5], [5.,])
+    global impU = U
+    couplings = Dict(
+                     "mu_c" => [0.3, 0.2, 0.3],
+                     "W" => [-1.5, 0.2, 0.5],
+                     "kondoF" => [kondoF],
+                     "Wf" => [-0.4, 0.01, -0.2],
+                     "epsilonF" => [-0.5 * impU],
+                     "lightBandFactor" => [1.5],
+                     "kondoPerp" => [0.1, 0.05, 0.1],
+                    )
+    axLab = ["kondoPerp", "mu_c", "Wf", "W"]
+    @time append!(namesCorr,
+                AuxiliaryCorrelations(
+                    25,
+                    1501,
+                    couplings,
+                    axLab,
+                    Dict("SF-d0-f"=>L"\langle S_f \cdot S_{f}^\prime \rangle_\text{NN}", "SF-d0-s" => L"\langle S_f \cdot S_c \rangle", "Sdz" => L"S^z_\text{imp}", "SF-dNN"=>L"\langle S_f \cdot S_{N}\rangle", "SF-dAA" => L"\langle S_f \cdot S_{AN} \rangle", "PF" => "PF"),
+                    "sc-mz-";
+                    loadData=true,
+                   )
+               )
 
-#=PhaseDiagram(33, (0.05, 0.2, 0.65), (-0.6, 0.06, -0.0), (0.01, 0.07, 0.8), (0., -0.2, -0.6); loadData=false)=#
+    #=@time push!(namesPD, PhaseDiagram(=#
+    #=                25,=#
+    #=                couplings,=#
+    #=                axLab,=#
+    #=                Dict(["PF", L"J^*"]);=#
+    #=                loadData=false,=#
+    #=               ))=#
 
-#=postProcess(data) = reshape(data, (size_BZ, size_BZ)) .|> abs=#
-#==#
-#=node = map2DTo1D(π/2, π/2, size_BZ)=#
-#=midway = map2DTo1D(3π/4, π/4, size_BZ)=#
-#=antinode = map2DTo1D(π/1, 0., size_BZ)=#
-#=size_BZ = 41=#
-#=Wf_arr = NiceValues(size_BZ)[[1, 7, 8]]=#
-#=for Wc in [0.0, -0.2, -0.3] * kondoF=#
-#=    pdfPaths = String[]=#
-#=    for kondoPerp_i in [0., 1.2, 2.] .* kondoF=#
-#=        kondoJArrays, kondoPerpArrays, dispersion = RGFlow(Wf_arr, kondoPerp_i, Wc, size_BZ; loadData=true)=#
-#==#
-#=        fig, axes = plt.subplots(nrows=length(Wf_arr), ncols=3, figsize=(14, 9), gridspec_kw=Dict("width_ratios"=> [1,1,0.9]))=#
-#=        plt.subplots_adjust(wspace=0.5, hspace=0.5)=#
-#=        for (i, Wf) in enumerate(Wf_arr)=#
-#=            hmap = axes[i,1].imshow(postProcess(kondoJArrays[Wf][node, :, end]), aspect="auto", norm=matplotlib[:colors][:LogNorm]())=#
-#=            axes[i,1].set_xlabel(L"RG flow $\longrightarrow$")=#
-#=            axes[i,1].set_ylabel(L"$J_f~(k_\mathrm{N}, k)$")=#
-#=            fig.colorbar(hmap)=#
-#=            hmap = axes[i,2].imshow(postProcess(kondoJArrays[Wf][antinode, :, end]), aspect="auto", norm=matplotlib[:colors][:LogNorm]())=#
-#=            axes[i,2].set_xlabel(L"RG flow $\longrightarrow$")=#
-#=            axes[i,2].set_ylabel(L"$J_f~(k_\mathrm{AN}, k)$")=#
-#=            fig.colorbar(hmap)=#
-#=            axes[i,3].plot(kondoPerpArrays[Wf], label=L"$W_f = %$(round(Wf, digits=2))$")=#
-#=            axes[i,3].set_xlabel(L"RG flow $\longrightarrow$")=#
-#=            axes[i,3].set_ylabel(L"$J$")=#
-#=            axes[i,3].legend()=#
-#=        end=#
-#=        fig.suptitle(L"Varying $W_f$. $~ J/J_f=%$(kondoPerp_i / kondoF)~ W/J_f=%$(Wc/kondoF)$", y=0.93)=#
-#=        path = "rgflow-$(size_BZ)-$(Wc)-$(kondoPerp_i).pdf"=#
-#=        savefig(path, bbox_inches="tight"); PyPlot.close()=#
-#=        push!(pdfPaths, path)=#
-#=    end=#
-#=    merge_pdfs(pdfPaths, "rgflow-$(size_BZ)-$(Wc).pdf"; cleanup=true)=#
-#=end=#
+    #=@time ScattProb(25,=#
+    #=                couplings,=#
+    #=                axLab;=#
+    #=                loadData=true,=#
+    #=               )=#
+end
+if !isempty(namesPD); merge_pdfs(namesPD, "PD.pdf", cleanup=true); end
+if !isempty(namesCorr); merge_pdfs(namesCorr, "Corr.pdf", cleanup=true); end
