@@ -215,7 +215,34 @@ In the limit of large \(U_\alpha\), we carry out a Schrieffer-Wolff transformati
 	H_\text{aux} &= \sum_{{\bf k},\sigma,\alpha}\epsilon_{{\bf k},\alpha}n_{{\bf k},\sigma,\alpha} + \sum_\alpha\sum_{Z \in \text{NN}}\left[\frac{1}{2}J_\alpha\sum_{\sigma,\sigma^\prime}{\bf S}_\alpha \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{Z,\sigma,\alpha}c_{Z,\sigma^\prime,\alpha} - \frac{W_\alpha}{2} \left(n_{Z,\uparrow,\alpha} - n_{Z,\downarrow,\alpha}\right)^2\right] + J{\bf S}_f \cdot {\bf S}_d~.
 \end{aligned}\end{equation}
 
-In order to study the low-energy physics of the impurity model, we iteratively integrate out high-energy degrees of freedom using the unitary RG method. We already have the renormalisation group equations for the couplings \(J_\alpha\) in the case of \(J=0\). It turns out that even upon switching on \(J\), no additional processes exist which renormalise \(J_\alpha\). As a result, their RG equations remain unchanged.
+In order to study the low-energy physics of the impurity model, we iteratively integrate out high-energy degrees of freedom using the unitary RG method. For every shell of conduction bath states of width \(\Delta D\) integrated out, the Hamiltonian couplings renormalise by folding in the effects of virtual excitations to these states. We already have the renormalisation group equations for the couplings \(J_\alpha\) in the case of \(J=0\):
+\begin{equation}\begin{aligned}
+	\frac{\Delta J_f}{\Delta D} = J_f^2 \int_{UV} d{\bf q} ~\rho({\bf q}) G_f^{(0)}~,
+\end{aligned}\end{equation}
+where \({\bf q}\) sums over the UV states being integrated out, \(\rho({\bf q})\) is the density of states for the momentum states being integrated out and \(G_f^{(0)}\) is the propagator for the excited intermediate state (for \(J=0\)):
+\begin{equation}\begin{aligned}
+	G_f^{(0)} = \frac{1}{\omega - \epsilon_f({\bf q}) / 2 + J_f / 4 + W_f / 2}~.
+\end{aligned}\end{equation}
+An identical equations holds for \(\Delta J_d\), with al \(f-\)quantities replaced with \(d-\)quantities. Switching on \(J\) modifies the excitation energy in the propagator:
+\begin{equation}\begin{aligned}
+	G_f = \frac{1}{1/G_f^{(0)} - J \vec{S}_f\cdot\vec{S}_d}~.
+\end{aligned}\end{equation}
+This expression can be simplified by noting that the operator in the denominator has only two eigenvalues, \(-3/4\) in the singlet sector and \(1/4\) in the triplet sector. Defining the projectors \(\mathcal{P}_0\) and \(\mathcal{P}_1\) for the two sectors, we have
+\begin{equation}\begin{aligned}
+	\vec{S}_f\cdot\vec{S}_d = \frac{-3}{4}\mathcal{P}_0 + \frac{1}{4}\mathcal{P}_1, \quad \mathcal{P}_0 + \mathcal{P}_1 = \mathbb{I}~.
+\end{aligned}\end{equation}
+Using these relations, we can write
+\begin{equation}\begin{aligned}
+	G_f &= \frac{1}{1/G_f^{(0)} + 3J/4}\mathcal{P}_0 + \frac{1}{1/G_f^{(0)} - J/4}\mathcal{P}_1 \\
+		&= \left(\frac{1/4}{1/G_f^{(0)} + 3J/4} + \frac{3/4}{1/G_f^{(0)} - J/4}\right)\mathbb{I} + \left(\frac{1}{1/G_f^{(0)} + 3J/4} + \frac{1}{1/G_f^{(0)} - J/4}\right)\vec{S}_f\cdot\vec{S}_d~.
+\end{aligned}\end{equation}
+Noting that only the first operator renormalises the Kondo interaction, we get the following modified RG equation for the Kondo coupling \(J_\alpha\):
+\begin{equation}\begin{aligned}
+	\frac{\Delta J_\alpha}{\Delta D} = J_\alpha^2 \int_{UV} d{\bf q} ~\rho({\bf q}) \left(\frac{1/4}{\omega - \epsilon_\alpha({\bf q}) / 2 + J_\alpha / 4 + W_\alpha / 2 + 3J/4} + \frac{3/4}{\omega - \epsilon_\alpha({\bf q}) / 2 + J_\alpha / 4 + W_\alpha / 2 - J/4}\right)~,
+\end{aligned}\end{equation}
+
+
+
 
 We now turn to the renormalisation of \(J\), arising from hybridisation of \(f-\) and \(d-\)layers. Let the momentum states being decoupled from the two layers be \(\ket{{\bf q}_\pm,\sigma,f}\) and \(\ket{{\bf q}_\pm,\sigma,d}\), where the subscript indicates the sign of the energy of that state (and hence whether its occupancy in the low-energy configurations \(\ket{L}_f\), \(\ket{L}_d\)). In order to capture coherent scattering processes between the two layers, we project onto the following rotated basis of excited states:
 \begin{equation}\begin{aligned}
@@ -262,61 +289,6 @@ The time-reversed of this process can be obtained simply by exchanging the \(d-\
 							  &= \frac{1}{2}J_f J_d \int_{UV} d{\bf q} ~\rho({\bf q}) \left[\frac{1}{\omega - \frac{1}{2}\left[\epsilon_f(q_+) - \epsilon_f(q_-)\right] + \frac{1}{2}J_f + W_f - \frac{1}{4}J} + \frac{1}{\omega - \frac{1}{2}\left[\epsilon_d(q_+) - \epsilon_d(q_-)\right] + \frac{1}{2}J_d + W_d - \frac{1}{4}J}\right]
 \end{aligned}\end{equation}
 
-
-
-
-
-\newpage
-
-The various processes contributing to its renormalisation can be classified into the following groups.
-\subsection{Through spin-flip scattering within \(f-\) and \(d-\)layers}
-We first consider scattering processes that integrate out particle (occupied) states of the high-energy subspace. One such process is
-\begin{equation}\begin{aligned}
-	\Delta_{1} = \frac{1}{N^2}\sum_{{\bf q} \in \text{UV}}\sum_{{\bf k} \in \text{IR}}\frac{1}{2}J S_f^+ S_d^- G_{2,f}(\epsilon_{{\bf q},f} - \epsilon_{{\bf k},f}) \frac{1}{2}J_f S_f^- c^\dagger_{{\bf q}\uparrow}c_{{\bf k}\downarrow} G_{1,f}(\epsilon_{{\bf k},f} - \epsilon_{{\bf q},f}, {\bf k}, {\bf q}) \frac{1}{2}J_fS_f^+ c^\dagger_{{\bf k}\downarrow}c_{{\bf q}\uparrow}~,
-\end{aligned}\end{equation}
-where \(G_{1,f}\) and \(G_{2,f}\) are propagators for the first and second intermediate states:
-\begin{equation}\begin{aligned}
-	G_{1,f}(E, {\bf k}, {\bf q}) &= \frac{1}{\omega - \frac{1}{2}E + \frac{1}{4}\left(J_f({\bf k}) + J_f({\bf q})\right) + \frac{1}{2}\left(W_f({\bf k}) + W_f({\bf q})\right)}~,\quad G_{2,f}(E) &= \frac{1}{\omega - \frac{1}{2}E}~.
-\end{aligned}\end{equation}
-Upon contracting the momentum field operators, we get
-\begin{equation}\begin{aligned}
-	\Delta_{1} &= S_f^+ S_d^- \frac{1}{N^2}\frac{1}{8}J J_f^2 \sum_{{\bf q} \in \text{UV}}\sum_{{\bf k} \in \text{IR}}G_{1,f}(\epsilon_{{\bf k},f} - \epsilon_{{\bf q},f}, {\bf k}, {\bf q}) G_{2,f}(\epsilon_{{\bf q},f} - \epsilon_{{\bf k},f}) n_{{\bf q}\uparrow}\left(1 - n_{{\bf k}\downarrow}\right)\\
-			   &= S_f^+ S_d^- \frac{1}{8}J J_f^2 \int_\text{UV} d\epsilon_1 \int_\text{IR} d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2) n_{{\bf q}\uparrow}\left(1 - n_{{\bf k}\downarrow}\right) \\ 
-			   &= S_f^+ S_d^- \frac{1}{8}J J_f^2 \int_{-D}^{-(D - \delta D)} d\epsilon_1 \int_0^D d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2)~.
-\end{aligned}\end{equation}
-
-A very similar process can be constructed by reversing the sequence of operations in the present process, while staying in the occupied sector:
-\begin{equation}\begin{aligned}
-	\Delta_{2} = \frac{1}{N^2}\sum_{{\bf q} \in \text{UV}}\sum_{{\bf k} \in \text{IR}}\frac{1}{2}J_fS_f^+ c^\dagger_{{\bf q}\downarrow}c_{{\bf k}\uparrow}  G_{1,f}(\epsilon_{{\bf k},f} - \epsilon_{{\bf q},f}, {\bf k}, {\bf q}) \frac{1}{2}J_f S_f^- c^\dagger_{{\bf k}\uparrow}c_{{\bf q}\downarrow} G_{2,f}(\epsilon_{{\bf q},f} - \epsilon_{{\bf k},f}) \frac{1}{2}J S_f^+ S_d^- ~.
-\end{aligned}\end{equation}
-This leads to an exchange of the intermediate states, leaving the product of propagators \(G_{1,f} G_{2,f}\) unchanged. Combining with the previous contribution, we get
-\begin{equation}\begin{aligned}
-	\Delta_{1}  + \Delta_2 &= S_f^+ S_d^- \frac{1}{8}J J_f^2 \int_\text{UV} d\epsilon_1 \int_\text{IR} d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2) \sum_\sigma n_{{\bf q}\sigma}\left(1 - n_{{\bf k}\bar\sigma}\right)\\
-						   &= S_f^+ S_d^- \frac{1}{4}J J_f^2 \int_{-D}^{-(D - \delta D)} d\epsilon_1 \int_0^D d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2)~.
-\end{aligned}\end{equation}
-
-The particle-hole transformed contribution is easily obtained by switching the momentum indices in the propagators. In total, we get
-\begin{equation}\begin{aligned}
-	\Delta_{1}  + \Delta_2 = S_f^+ S_d^- \frac{1}{4}J J_f^2 &\left[\int_{-D}^{-(D - \delta D)} d\epsilon_1 \int_0^D d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_2 - \epsilon_1, {\bf k}, {\bf q}) G_{2,f}(\epsilon_1 - \epsilon_2) \right.\\
-															&+\left. \int_{D - \delta D}^{D} d\epsilon_1 \int_{-D}^0 d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_1 - \epsilon_2, {\bf k}, {\bf q}) G_{2,f}(\epsilon_2 - \epsilon_1)\right]~\\
-	=S_f^+ S_d^- \frac{1}{4}J J_f^2 &\int_{D - \delta D}^{D} d\epsilon_1 \int_{-D}^0 d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}\left[G_{1,f}(\epsilon_1 - \epsilon_2, {\bf k}, {\bf q}) G_{2,f}(\epsilon_2 - \epsilon_1) + G_{1,f}(\epsilon_1 - \epsilon_2, {\bf k} + {\bf Q}_2, {\bf q} + {\bf Q}_2) G_{2,f}(\epsilon_2 - \epsilon_1)\right]~,
-\end{aligned}\end{equation}
-where we substituted \(\epsilon_i \to -\epsilon_i\) in the first integral and used \(\epsilon_{\bf q} = -\epsilon_{{\bf q} + {\bf Q}_2}\), with \({\bf Q}_2 = \left(\pi, \pi\right)\). Using the properties of \(J\) and \(W\), we can show that \(J({\bf k}_1) = J({\bf k}_1 + {\bf Q}_2)\). This property allows us to equate the two products within the integrand:
-\begin{equation}\begin{aligned}
-	\Delta_{1,f}  + \Delta_{2,f} = \frac{1}{2}S_f^+ S_d^- J J_f^2 &\int_{D - \delta D}^{D} d\epsilon_1 \int_{-D}^0 d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,f}(\epsilon_1 - \epsilon_2, {\bf k}, {\bf q}) G_{2,f}(\epsilon_2 - \epsilon_1) ~.
-\end{aligned}\end{equation}
-where the subscript \(f\) indicates that this takes into account spin-flip scattering processes within the \(f-\)layer.
-
-Carrying out the same computation for the \(d-\)layer simply requires changing all \(f-\)quantities to \(d-\)quantities:
-\begin{equation}\begin{aligned}
-	\Delta_{1,d}  + \Delta_{2,d} = \frac{1}{2}S_f^+ S_d^- J J_d^2 &\int_{D - \delta D}^{D} d\epsilon_1 \int_{-D}^0 d\epsilon_2 \sum_{{\bf q} \in \epsilon_1}~\sum_{{\bf k} \in \epsilon_2}G_{1,d}(\epsilon_1 - \epsilon_2, {\bf k}, {\bf q}) G_{2,d}(\epsilon_2 - \epsilon_1) ~,
-\end{aligned}\end{equation}
-where 
-\begin{equation}\begin{aligned}
-	G_{1,d}(E, {\bf k}, {\bf q}) &= \frac{1}{\omega - \frac{1}{2}E + \frac{1}{4}\left(J_d({\bf k}) + J_d({\bf q})\right) + \frac{1}{2}\left(W_d({\bf k}) + W_d({\bf q})\right)}~,\quad G_{2,d}(E) &= \frac{1}{\omega - \frac{1}{2}E}~.
-\end{aligned}\end{equation}
-
-
-
-
+\section{RG Flow simulation on the \(d=\infty\) Bethe lattice at half-filling}
+\includegraphics[width=\textwidth]{bilayerHubbard.pdf}
 \end{document}

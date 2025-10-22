@@ -1,23 +1,21 @@
-using PyPlot
+using PyPlot, ProgressMeter
 
-function deltaJf(ω, params, dos, initSign)
-    denominator = ω(params["bw"]) - params["bw"] / 2 + params["Jf"] / 4 + params["Wf"] / 2
-    if sign(denominator) == initSign
-        return -(params["Jf"]^2 + 4 * params["Jf"] * params["Wf"]) * dos / denominator
-    else
-        return 0
-    end
+function getDenominators(params, ω)
+    return Dict("Jf" => [ω(params["bw"]) - params["bw"] / 2 + params["Jf"] / 4 + params["Wf"] / 2 + 3 * params["J"] / 4, ω(params["bw"]) - params["bw"] / 2 + params["Jf"] / 4 + params["Wf"] / 2 - params["J"] / 4],
+                "Jd" => [ω(params["bw"]) - params["bw"] / 2 + params["Jd"] / 4 + params["Wd"] / 2 + 3 * params["J"] / 4, ω(params["bw"]) - params["bw"] / 2 + params["Jd"] / 4 + params["Wd"] / 2 - params["J"] / 4],
+                "J" => [ω(params["bw"]) - params["bw"] + params["Jf"] / 2 + params["Wf"] - params["J"] / 4, ω(params["bw"]) - params["bw"] + params["Jd"] / 2 - params["J"] / 4]
+               )
 end
-function deltaJd(ω, params, dos, initSign)
-    denominator = ω(params["bw"]) - params["bw"] / 2 + params["Jd"] / 4
-    if sign(denominator) == initSign
-        return -params["Jd"]^2 * dos / denominator
-    else
-        return 0
-    end
+
+function deltaJfd(ω, params, dos, initSign, key)
+    @assert key ∈ "fd"
+    denominators = getDenominators(params, ω)["J"*key]
+    flags = [s == sign(d) ? 1 : 0 for (s,d) in zip(initSign, denominators)]
+    return -(params["J"*key]^2 + 4 * params["J"*key] * params["W"*key]) * dos * sum([0.25, 0.75] .* flags ./ denominators)
 end
+
 function deltaJ(ω, params, dos, initSign)
-    denominators =[ω(params["bw"]) - params["bw"] / 2 + params["Jf"] / 4 + params["Wf"] / 2 - params["J"] / 4, ω(params["bw"]) - params["bw"] / 2 + params["Jd"] / 4 - params["J"] / 4]
+    denominators = getDenominators(params, ω)["J"]
     flags = [s == sign(d) ? 1 : 0 for (s,d) in zip(initSign, denominators)]
     return 0.5 * params["Jf"] * params["Jd"] * dos * sum(flags ./ denominators)
 end
@@ -34,24 +32,20 @@ function rgFlow(
     )
     renormalisedParams = Dict(k => [v] for (k,v) in bareParams)
     D = bareParams["bw"]
-    initSigns = sign.([ω(bareParams["bw"]) - bareParams["bw"] / 2 + bareParams["Jf"] / 4 + bareParams["Wf"] / 2, 
-                       ω(bareParams["bw"]) - bareParams["bw"] / 2 + bareParams["Jd"] / 4,
-                       ω(bareParams["bw"]) - bareParams["bw"] / 2 + bareParams["Jf"] / 4 + bareParams["Wf"] / 2 - bareParams["J"] / 4,
-                       ω(bareParams["bw"]) - bareParams["bw"] / 2 + bareParams["Jd"] / 4 - bareParams["J"] / 4
-                      ])
+    initDenominators = getDenominators(bareParams, ω)
     deltaSigns = Dict{String, Any}(g => nothing for g in ("Jf", "Jd", "J"))
     while renormalisedParams["bw"][end] > 0
         latestDict = LatestDict(renormalisedParams)
         delta = Dict()
-        delta["Jf"] = (deltaSigns["Jf"] ≠ 0 && latestDict["Jf"] ≠ 0) ? abs(ΔD) * deltaJf(ω, latestDict, dos, initSigns[1]) : 0
-        delta["Jd"] = (deltaSigns["Jd"] ≠ 0 && latestDict["Jd"] ≠ 0) ? abs(ΔD) * deltaJd(ω, latestDict, dos, initSigns[2]) : 0
-        delta["J"] = (deltaSigns["J"] ≠ 0 && latestDict["J"] ≠ 0) ? abs(ΔD) * deltaJ(ω, latestDict, dos, initSigns[3:4]) : 0
-        #=println(delta)=#
+        delta["Jf"] = (deltaSigns["Jf"] ≠ 0 && latestDict["Jf"] ≠ 0) ? abs(ΔD) * deltaJfd(ω, latestDict, dos, sign.(initDenominators["Jf"]), 'f') : 0
+        delta["Jd"] = (deltaSigns["Jd"] ≠ 0 && latestDict["Jd"] ≠ 0) ? abs(ΔD) * deltaJfd(ω, latestDict, dos, sign.(initDenominators["Jd"]), 'd') : 0
+        delta["J"] = (deltaSigns["J"] ≠ 0 && latestDict["J"] ≠ 0) ? abs(ΔD) * deltaJ(ω, latestDict, dos, sign.(initDenominators["J"])) : 0
         for (k, s) in deltaSigns
             if isnothing(s)
                 deltaSigns[k] = sign(delta[k])
             elseif s * delta[k] < 0
                 deltaSigns[k] = 0
+                delta[k] = 0
             end
         end
         for (k, v) in delta
@@ -69,36 +63,53 @@ function rgFlow(
     return renormalisedParams
 end
 
-WfValues = -0:-0.005:-0.2
-JValues = 0:0.005:0.2
-JfFixedPoint = []
-JFixedPoint = []
-for J in JValues
-    for Wf in WfValues
+function getFixedPointData(WfValues, JValues)
+    FixedPoint = Dict(k => zeros(length(WfValues) * length(JValues)) for k in ["Jf", "Jd", "J"])
+    Bools = Dict(k => zeros(length(WfValues) * length(JValues)) for k in ["Jf", "Jd", "J"])
+    @showprogress for (index, (Wf, J)) in enumerate(Iterators.product(WfValues, JValues)) |> collect
         couplingsFlow = rgFlow(
-               Dict("bw" => 1.0, "Jf" => 0.1, "Jd" => 0.1, "J" => J, "Wf" => Wf),
+               Dict("bw" => 1.0, "Jf" => 0.1, "Jd" => 0.1, "J" => J, "Wf" => Wf, "Wd" => 0),
                D -> -D,
-               1.,
+               2.,
                0.001,
               )
-        push!(JfFixedPoint, couplingsFlow["Jf"][end])
-        push!(JFixedPoint, couplingsFlow["J"][end])
+        for k in ["Jf", "Jd", "J"]
+            FixedPoint[k][index] = couplingsFlow[k][end]
+            Bools[k][index] = ifelse(couplingsFlow[k][end] > couplingsFlow[k][1], 2, 
+                                     ifelse(couplingsFlow[k][end] > 0.7 * couplingsFlow[k][1], 1, 0)
+                                    )
+        end
     end
+    return FixedPoint, Bools
 end
-fig, ax = subplots(figsize=(7, 4))
-fig.tight_layout()
-hm = ax.imshow(reshape(JfFixedPoint, length(WfValues), length(JValues)), origin="lower", extent=(extrema(JValues)..., extrema(-WfValues)...), cmap="inferno", aspect="equal")
-ax.set_xlabel("J")
-ax.set_ylabel("-Wf")
-yPoints = repeat(-WfValues, outer=length(JValues))
-xPoints = repeat(JValues, inner=length(WfValues))
-#=println(JFixedPoint)=#
-s = ax.scatter(xPoints, yPoints, c=JFixedPoint, s=5)
-fig.colorbar(hm, location="left", label="HM: J_f", shrink=0.5)
-fig.colorbar(s, label="SC: J", shrink=0.5)
-savefig("bilayerHubbard.pdf", bbox_inches="tight")
 
-#=plot!(p, WfValues, JfFixedPoint, label="Jf")=#
-#=plot!(p, WfValues, JFixedPoint, label="J")=#
-#=plot!(p, WfValues, JFixedPoint, label="J")=#
-#=display(p)=#
+WfValues = -0:-0.002:-0.15
+JValues = 0:0.002:0.15
+FixedPoint, Bools = getFixedPointData(WfValues, JValues)
+fig, axes = subplots(ncols=3, nrows=2, figsize=(8, 4))
+fig.tight_layout()
+for (i, key) in enumerate(["Jf", "Jd", "J"])
+    title = Dict("Jf" => "\$J_f\$", "Jd" => "\$J_d\$", "J" => "\$J\$")[key]
+    data = FixedPoint[key]
+    bool = Bools[key]
+    ax = axes[1, i]
+    hm = ax.imshow(reshape(data, length(WfValues), length(JValues)), origin="lower", extent=(extrema(JValues)..., extrema(-WfValues)...), cmap="inferno", aspect="equal", vmax=minimum((0.4, maximum(data))))
+    ax.set_xlabel("\$J\$")
+    ax.set_ylabel("\$|Wf|\$")
+    ax.set_title("RG flow of $(title)", pad=10)
+    yPoints = repeat(-WfValues, outer=length(JValues))
+    xPoints = repeat(JValues, inner=length(WfValues))
+    fig.colorbar(hm)
+
+    ax = axes[2, i]
+    hm = ax.imshow(reshape(bool, length(WfValues), length(JValues)), origin="lower", extent=(extrema(JValues)..., extrema(-WfValues)...), cmap="inferno", aspect="equal", vmin=0, vmax=2)
+    ax.set_xlabel("\$J\$")
+    ax.set_ylabel("\$|Wf|\$")
+    ax.set_title("Class of flow of $(title)", pad=10)
+    yPoints = repeat(-WfValues, outer=length(JValues))
+    xPoints = repeat(JValues, inner=length(WfValues))
+    fig.colorbar(hm)
+end
+fig.tight_layout()
+plt.rcParams["text.usetex"] = true
+savefig("bilayerHubbard.pdf", bbox_inches="tight")
