@@ -1,139 +1,60 @@
 using LinearAlgebra, JLD2
 
-
-function deltaJk1k2(
-    denominators::Vector{NTuple{2, Float64}},
-    proceed_flagk1k2::Int64,
-    kondoJArrayPrev_k1k2::Float64,
-    kondoJ_k2q_qk1::Vector{Float64},
-    kondoJ_qqbar::Vector{Float64},
-    deltaEnergy::Float64,
-    size_BZ::Int64,
-    bathIntArgs,
-    densityOfStates_q::Vector{Float64},
-    interLayerTerm::Float64,
-)
-    # if the flag is disabled for this momentum pair, don't bother to do the rest
-    if proceed_flagk1k2 == 0 || length(denominators) == 0
-        return 0, 0
-    end
-
-    # the renormalisation itself is given by the expression
-    # ΔJ(k1, k2) = ∑_q [J(k2,q)J(q,k1) + 4 * J(q,qbar) * W(qbar, k2, k1, q)]/[ω - E/2 + J(q)/4 + W(q)/2]
-    renormalisation =
-        -deltaEnergy * sum(
-            densityOfStates_q .*
-            ((kondoJ_k2q_qk1 .+ 4 .* kondoJ_qqbar .* bathIntForm(bathIntArgs...)) .* 0.5 .* sum.(denominators) .+ kondoJArrayPrev_k1k2 * interLayerTerm)
-        ) * 2π / size_BZ
-
-    # if a non-zero coupling goes through a zero, we set it to zero, and disable its flag.
-    if abs(kondoJArrayPrev_k1k2) > RG_TOL && (kondoJArrayPrev_k1k2 + renormalisation) < RG_TOL
-        kondoJArrayNext_k1k2 = 0
-        proceed_flagk1k2 = 0
-    else
-        kondoJArrayNext_k1k2 = kondoJArrayPrev_k1k2 + renormalisation
-    end
-
-    return kondoJArrayNext_k1k2, proceed_flagk1k2
+function initialiseKondoJ(
+        size_BZ::Int64, 
+        num_steps::Int64,
+        kondoF::Float64
+    )
+    # Kondo coupling must be stored in a 3D matrix. Two of the dimensions store the 
+    # incoming and outgoing momentum indices, while the third dimension stores the 
+    # behaviour along the RG flow. For example, J[i][j][k] reveals the value of J 
+    # for the momentum pair (i,j) at the k^th Rg step.
+    kondoJArray = Array{Float64}(undef, size_BZ^2, size_BZ^2)
+    k1x_vals, k1y_vals = map1DTo2D(collect(1:size_BZ^2), size_BZ)
+    kondoJArray[:, :] .= 0.5 * kondoF .* (cos.(k1x_vals' .- k1x_vals) .+ cos.(k1y_vals' .- k1y_vals))
+    return kondoJArray
 end
 
 
-function symmetriseRGFlow(innerIndicesArr, excludedVertexPairs, mixedVertexPairs, size_BZ, kondoJArrayNext, kondoJArrayPrev, proceed_flags)
-    Threads.@threads for (innerIndex1, excludedIndex) in mixedVertexPairs
-        innerIndex2 = particleHoleTransf(excludedIndex, size_BZ)
-        @assert innerIndex1 in innerIndicesArr
-        @assert innerIndex2 in innerIndicesArr
-        kondoJArrayNext[innerIndex1, excludedIndex] = kondoJArrayNext[excludedIndex, innerIndex1] = -kondoJArrayNext[innerIndex1, innerIndex2]
-        proceed_flags[innerIndex1, excludedIndex] = proceed_flags[innerIndex1, innerIndex2]
-        proceed_flags[excludedIndex, innerIndex1] = proceed_flags[innerIndex1, innerIndex2]
-    end
-    Threads.@threads for (index1, index2) in excludedVertexPairs
-        sourcePoint1, sourcePoint2 = particleHoleTransf([index1, index2], size_BZ)
-        @assert sourcePoint1 in innerIndicesArr
-        @assert sourcePoint2 in innerIndicesArr
-        kondoJArrayNext[index1, index2] = kondoJArrayNext[index2, index1] = kondoJArrayNext[sourcePoint1, sourcePoint2]
-        proceed_flags[index1, index2] = proceed_flags[sourcePoint1, sourcePoint2]
-        proceed_flags[index2, index1] = proceed_flags[sourcePoint1, sourcePoint2]
-    end
-    return kondoJArrayNext, proceed_flags
+function getCutOffEnergy(size_BZ)
+    kx_pos_arr = [kx for kx in range(K_MIN, K_MAX, length=size_BZ) if kx >= 0]
+    return sort(-tightBindDisp(kx_pos_arr, 0 .* kx_pos_arr), rev=true)
 end
 
 
-function stepwiseRenormalisation(
-    innerIndicesArr::Vector{Int64},
-    omega_by_t::Float64,
-    excludedVertexPairs::Vector{Tuple{Int64,Int64}},
-    mixedVertexPairs::Vector{Tuple{Int64,Int64}},
-    energyCutoff::Float64,
-    cutoffPoints::Vector{Int64},
-    cutoffHolePoints::Vector{Int64},
-    proceed_flags::Matrix{Int64},
-    kondoJArrayPrev::Array{Float64,2},
-    kondoJArrayNext::Array{Float64,2},
-    Wf::Float64,
-    epsilonF::Float64,
-    mu_c::Float64,
-    size_BZ::Int64,
-    deltaEnergy::Float64,
-    densityOfStates::Vector{Float64},
-    interLayerTerm::Float64,
+function highLowSeparation(
+        dispersionArray,
+        energyCutoff,
+        proceedFlags,
+        size_BZ
     )
 
-    # construct denominators for the RG equation, given by
-    # d = ω - E/2 + J(q)/4 + W(q)/2
+    # get the k-points that will be decoupled at this step, by getting the isoenergetic contour at the cutoff energy.
+    cutoffPoints = unique(getIsoEngCont(dispersionArray, energyCutoff))
+    cutoffHolePoints = particleHoleTransf(cutoffPoints, size_BZ)
 
-    OMEGA = omega_by_t * HOP_T
-    denFunc(point, ϵ) = 1 / (OMEGA - ϵ/2 + kondoJArrayPrev[point, point] / 4 + bathIntForm(Wf, size_BZ, (point, point, point, point)) / 2 - epsilonF)
-    denominators = [(denFunc(p, abs(energyCutoff) - mu_c), denFunc(p, abs(energyCutoff) + mu_c)) for p in cutoffPoints]
-
-    # only consider those terms whose denominator haven't gone through zeros
-    cutoffPoints = cutoffPoints[any.(<(0), denominators)]
-    cutoffHolePoints = cutoffHolePoints[any.(<(0), denominators)]
-    denominators = denominators[any.(<(0), denominators)]
-
-    if length(cutoffPoints) == 0
-        proceed_flags[:, :] .= 0
-        return kondoJArrayNext, proceed_flags
+    # these cutoff points will no longer participate in the RG flow, so disable their flags
+    for key in ["d", "f"]
+        proceedFlags[key][[cutoffPoints; cutoffHolePoints], :] .= 0
+        proceedFlags[key][:, [cutoffPoints; cutoffHolePoints]] .= 0
     end
 
-    # loop over (k1, k2) pairs that represent the momentum states within the emergent window,
-    # so that we can calculate the renormalisation of J(k1, k2), for all k1, k2.
-    externalVertexPairs = [
-        (p1, p2) for p1 in sort(innerIndicesArr) for
-        p2 in sort(innerIndicesArr)[sort(innerIndicesArr).>=p1]
-    ]
-    kondoJ_qq_bar = diag(kondoJArrayPrev[cutoffPoints, cutoffHolePoints])
-    dOfStates_cutoff = densityOfStates[cutoffPoints]
-    Threads.@threads for (innerIndex1, innerIndex2) in externalVertexPairs
-        kondoJ_k2_q_times_kondoJ_q_k1 = diag(kondoJArrayPrev[innerIndex2, cutoffPoints] * kondoJArrayPrev[innerIndex1, cutoffPoints]')
-        kondoJArrayNext_k1k2, proceed_flag_k1k2 = deltaJk1k2(
-            denominators,
-            proceed_flags[innerIndex1, innerIndex2],
-            kondoJArrayPrev[innerIndex1, innerIndex2],
-            kondoJ_k2_q_times_kondoJ_q_k1,
-            kondoJ_qq_bar,
-            deltaEnergy,
-            size_BZ,
-            [
-                Wf,
-                size_BZ,
-                Tuple([cutoffHolePoints, innerIndex2, innerIndex1, cutoffPoints]),
-            ],
-            dOfStates_cutoff,
-            interLayerTerm,
-        )
-        kondoJArrayNext[innerIndex1, innerIndex2] = kondoJArrayNext_k1k2
-        kondoJArrayNext[innerIndex2, innerIndex1] = kondoJArrayNext_k1k2
-        proceed_flags[innerIndex1, innerIndex2] = proceed_flag_k1k2
-        proceed_flags[innerIndex2, innerIndex1] = proceed_flag_k1k2
-    end
-    kondoJArrayNext, proceed_flags = symmetriseRGFlow(innerIndicesArr, excludedVertexPairs, mixedVertexPairs, size_BZ, kondoJArrayNext, kondoJArrayPrev, proceed_flags)
-    return kondoJArrayNext, proceed_flags
+    # get the k-space points that need to be tracked for renormalisation, by getting the states 
+    # below the cutoff energy. We only take points within the lower left quadrant, because the
+    # other quadrant is obtained through symmetry relations.
+    innerIndices = Dict(key => [
+                                point for (point, energy) in enumerate(dispersionArray) if
+                                abs(energy) < (abs(energyCutoff) - TOLERANCE)
+                                && any(proceedFlags[key][:, point])
+                               ]
+                        for key in ["f", "d"]
+                       )
+    return innerIndices, cutoffPoints, cutoffHolePoints, proceedFlags
 end
 
 @everywhere function momentumSpaceRG(
         size_BZ::Int64,
-        couplings::Dict;
+        bareCouplings::Dict;
         progressbarEnabled=false,
         loadData::Bool=false,
         saveData::Bool=true,
@@ -141,27 +62,23 @@ end
     kvals = map1DTo2D.(1:size_BZ^2, size_BZ)
     kxVals = first.(kvals)
     kyVals = last.(kvals)
-    omega_by_t = couplings["omega_by_t"]
-    kondoF = couplings["kondoF"]
-    kondoD = couplings["kondoD"]
-    kondoPerp = couplings["kondoPerp"]
-    Wf = couplings["Wf"]
-    Wd = couplings["Wd"]
+    omega_by_t = bareCouplings["omega_by_t"]
+    W = bareCouplings["W"]
 
-    savePath = joinpath(SAVEDIR, SavePath("rgflow", size_BZ, couplings, "jld2"))
-    mkpath(SAVEDIR)
-    if isfile(savePath) && loadData
-        _, dispersionArray = getDensityOfStates(tightBindDisp, size_BZ)
-        kondoJArray = zeros(size_BZ^2, size_BZ^2)
-        kondoPerpArray = nothing
-        jldopen(savePath, "r") do f
-            kondoJArray = f["kondoRenorm"]
-            kondoPerpArray = f["kondoPerpArray"]
-        end
-
-        return kondoJArray, kondoPerpArray, dispersionArray
-    end
-
+    #=savePath = joinpath(SAVEDIR, SavePath("rgflow", size_BZ, couplings, "jld2"))=#
+    #=mkpath(SAVEDIR)=#
+    #=if isfile(savePath) && loadData=#
+    #=    _, dispersionArray = getDensityOfStates(tightBindDisp, size_BZ)=#
+    #=    kondoJArray = zeros(size_BZ^2, size_BZ^2)=#
+    #=    kondoPerpArray = nothing=#
+    #=    jldopen(savePath, "r") do f=#
+    #=        kondoJArray = f["kondoRenorm"]=#
+    #=        kondoPerpArray = f["kondoPerpArray"]=#
+    #=    end=#
+    #==#
+    #=    return kondoJArray, kondoPerpArray, dispersionArray=#
+    #=end=#
+    #==#
 
     # ensure that [0, \pi] has odd number of states, so 
     # that the nodal point is well-defined.
@@ -176,65 +93,81 @@ end
     # incoming and outgoing momentum indices, while the third dimension stores the 
     # behaviour along the RG flow. For example, J[i][j][k] reveals the value of J 
     # for the momentum pair (i,j) at the k^th Rg step.
-    kondoFArray = initialiseKondoJ(size_BZ, div(size_BZ + 1, 2), kondoF)
-    kondoDArray = initialiseKondoJ(size_BZ, div(size_BZ + 1, 2), kondoD)
-    initSignsF = sign.(kondoFArray)
-    initSignsD = sign.(kondoDArray)
-    initSignPerp = sign(kondoPerp)
+    couplings = Dict("f" => initialiseKondoJ(size_BZ, div(size_BZ + 1, 2), bareCouplings["Jf"]),
+                     "d" => initialiseKondoJ(size_BZ, div(size_BZ + 1, 2), bareCouplings["Jd"]),
+                     "⟂" => bareCouplings["J⟂"],
+                )
+    initSigns = Dict(k => sign.(v) for (k, v) in couplings)
 
     # define flags to track whether the RG flow for a particular J_{k1, k2} needs to be stopped 
     # (perhaps because it has gone to zero, or its denominator has gone to zero). These flags are
     # initialised to one, which means that by default, the RG can proceed for all the momenta.
-    proceedFlags = Dict("f" => fill(1, size_BZ^2), "d" => fill(1, size_BZ^2), "⟂" => [1])
+    proceedFlags = Dict("f" => fill(true, size_BZ^2, size_BZ^2), "d" => fill(true, size_BZ^2, size_BZ^2), "⟂" => [true])
 
     # Run the RG flow starting from the maximum energy, down to the penultimate energy (ΔE), in steps of ΔE
 
-    perpDeltaSign = nothing
+    initDeltaSigns = Dict("d" => repeat([1.], size_BZ^2, size_BZ^2),
+                          "f" => repeat([1.], size_BZ^2, size_BZ^2),
+                          "⟂" => 1
+                         )
+    #=initDeltaSignPerp = 1=#
 
-    GfMatrix = 0 .* kondoDArray
-    GdMatrix = 0 .* kondoDArray
+    GMatrix = Dict(k => 0 .* couplings[k] for k in ["f", "d"])
     WMatrix = 0.5 .* (cos.(kxVals' .- kxVals) .+ cos.(kyVals' .- kyVals))
     for (stepIndex, energyCutoff) in enumerate(cutOffEnergies[1:end-1])
         deltaEnergy = abs(cutOffEnergies[stepIndex+1] - cutOffEnergies[stepIndex])
 
         # if there are no enabled flags (i.e., all are zero), stop the RG flow
-        if all([all(==(0), v) for v in values(proceedFlags)])
+        if !any([any(v) for v in values(proceedFlags)])
             break
         end
 
         innerIndices, cutoffPoints, cutoffHolePoints, proceedFlags = highLowSeparation(dispersionArray, energyCutoff, proceedFlags, size_BZ)
-        GfMatrix .= 0
-        GdMatrix .= 0
+        GMatrix["f"] .= 0
+        GMatrix["d"] .= 0
         GVector = zeros(length(cutoffPoints))
         for (i_q, (q, qbar)) in enumerate(zip(cutoffPoints, cutoffHolePoints))
-            GfMatrix[q, q] = densityOfStates[q] * (0.25 / (omega_by_t * HOP_T - energyCutoff / 2 + kondoFArray[q, q] / 4 + Wf / 2 + 0.75 * kondoPerp) + 0.75 / (omega_by_t * HOP_T - energyCutoff / 2 + kondoFArray[q, q] / 4 + Wf / 2 - 0.25 * kondoPerp))
-            GdMatrix[q, q] = densityOfStates[q] * (0.25 / (omega_by_t * HOP_T - energyCutoff / 2 + kondoDArray[q, q] / 4 + Wd / 2 + 0.75 * kondoPerp) + 0.75 / (omega_by_t * HOP_T - energyCutoff / 2 + kondoDArray[q, q] / 4 + Wd / 2 - 0.25 * kondoPerp))
-            GVector[i_q] = densityOfStates[q] * (1 / (omega_by_t * HOP_T - 0.5 * (dispersionArray[q] - dispersionArray[qbar]) + kondoFArray[q, q] / 2 + Wf - 0.25 * kondoPerp) + 1 / (omega_by_t * HOP_T - 0.5 * (dispersionArray[q] - dispersionArray[qbar]) + kondoDArray[q, q] / 2 + Wd - 0.25 * kondoPerp))
+            for k in ["f", "d"]
+                GMatrix[k][q, q] = densityOfStates[q] * (0.25 / (omega_by_t * HOP_T - energyCutoff / 2 + couplings[k][q, q] / 4 + W[k] / 2 + 0.75 * couplings["⟂"]) + 0.75 / (omega_by_t * HOP_T - energyCutoff / 2 + couplings[k][q, q] / 4 + W[k] / 2 - 0.25 * couplings["⟂"]))
+            end
+            GVector[i_q] = sum([densityOfStates[q] / (omega_by_t * HOP_T - 0.5 * (dispersionArray[q] - dispersionArray[qbar]) + couplings[k][q, q] / 2 + W[k] - 0.25 * couplings["⟂"]) for k in ["f", "d"]])
         end
-        traceGprimeF = sum([GfMatrix[q, q] * kondoFArray[q, qbar] for (q,qbar) in zip(cutoffPoints, cutoffHolePoints)])
-        traceGprimeD = sum([GdMatrix[q, q] * kondoDArray[q, qbar] for (q,qbar) in zip(cutoffPoints, cutoffHolePoints)])
-        JVector = [kondoDArray[q, qbar] * kondoFArray[qbar, q] for (q,qbar) in zip(cutoffPoints, cutoffHolePoints)]
+        traceGprime = Dict(k => sum([GMatrix[k][q, q] * couplings[k][q, qbar] for (q,qbar) in zip(cutoffPoints, cutoffHolePoints)]) for k in ["f", "d"])
+        JVector = [couplings["f"][q, qbar] * couplings["d"][qbar, q] for (q,qbar) in zip(cutoffPoints, cutoffHolePoints)]
 
-        @time begin 
-            kondoFArray[innerIndices["f"], innerIndices["f"]] .+= (kondoFArray[innerIndices["f"], cutoffPoints] * GfMatrix[cutoffPoints, cutoffPoints] * kondoFArray[cutoffPoints, innerIndices["f"]] .+ Wf * traceGprimeF .* WMatrix[innerIndices["f"], innerIndices["f"]])
-            kondoDArray[innerIndices["d"], innerIndices["d"]] .+= (kondoDArray[innerIndices["d"], cutoffPoints] * GdMatrix[cutoffPoints, cutoffPoints] * kondoDArray[cutoffPoints, innerIndices["d"]] .+ Wd * traceGprimeD .* WMatrix[innerIndices["d"], innerIndices["d"]])
-            kondoPerp += 0.5 * (JVector' * GVector)
+        delta = Dict()
+        for k in ["f", "d"]
+            delta[k] = (couplings[k][innerIndices[k], cutoffPoints] * GMatrix[k][cutoffPoints, cutoffPoints] * couplings[k][cutoffPoints, innerIndices[k]] .+ W[k] * traceGprime[k] .* WMatrix[innerIndices[k], innerIndices[k]])
         end
-        @time begin 
-            proceedFlags["f"][innerIndices["f"]] .= Int.(diag(kondoFArray)[innerIndices["f"]] .* diag(initSignsF)[innerIndices["f"]] .< 0)
-            proceedFlags["d"][innerIndices["d"]] .= Int.(diag(kondoFArray)[innerIndices["d"]] .* diag(initSignsD)[innerIndices["d"]] .< 0)
-            kondoFArray[sign.(kondoFArray) .* initSignsF .≤ 0] .= 0
-            kondoDArray[sign.(kondoDArray) .* initSignsD .≤ 0] .= 0
-            if sign(kondoPerp) * initSignPerp < 0
-                proceedFlagPerp = 0
-                kondoPerp = 0
+        delta["⟂"] = 0.5 * (JVector' * GVector)
+        if step == 1
+            initDeltaSigns["f"] = sign.(delta["f"])
+            initDeltaSigns["d"] = sign.(delta["d"])
+            initDeltaSigns["⟂"] = sign(delta["⟂"])
+        else
+            for k in ["f", "d"]
+                initDeltaSigns[k][innerIndices[k], innerIndices[k]][sign.(delta[k]) .* initDeltaSigns[k][innerIndices[k], innerIndices[k]] .< 0] .= 0
+                delta[k][initDeltaSigns[k][innerIndices[k], innerIndices[k]] .== 0] .= 0
+            end
+            if sign(delta["⟂"]) * initDeltaSigns["⟂"] < 0
+                initDeltaSigns["⟂"] = 0
+                delta["⟂"] = 0
             end
         end
-        println("----")
-        #=println(count(>(0), proceedFlags["f"]))=#
+        for k in ["f", "d"]
+            couplings[k][innerIndices[k], innerIndices[k]] .+= delta[k]
+            proceedFlags[k][innerIndices[k], innerIndices[k]] .= couplings[k][innerIndices[k], innerIndices[k]] .* initSigns[k][innerIndices[k], innerIndices[k]] .≤ 0
+            couplings[k][sign.(couplings[k]) .* initSigns[k] .< 0] .= 0
+        end
+        couplings["⟂"] += delta["⟂"]
+        if sign(couplings["⟂"]) * initSigns["⟂"] < 0
+            proceedFlags["⟂"] = [false]
+            couplings["⟂"] = 0
+        end
+        #=println("-------")=#
     end
     #=if saveData=#
     #=    jldsave(savePath, true; kondoRenorm=kondoJArray[:, :, end], kondoPerpArray=kondoPerpArray)=#
     #=end=#
-    return kondoFArray, kondoDArray, kondoPerp
+    return couplings
 end

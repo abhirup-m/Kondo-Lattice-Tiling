@@ -9,7 +9,7 @@
 #SBATCH --time=24:00:00                        # Maximum runtime (D-HH:MM:SS)
 
 ENV["PYCALL_GC_FINALIZE"] = "0"
-using Distributed, SlurmClusterManager, PDFmerger, Fermions, ProgressMeter, PyPlot
+using Distributed, PDFmerger, ProgressMeter, PyPlot
 if "SLURM_SUBMIT_DIR" in keys(ENV)
     addprocs(SlurmManager())
 end
@@ -24,41 +24,55 @@ end
 @everywhere include(submitDir * "Constants.jl")
 @everywhere include(submitDir * "Helpers.jl")
 @everywhere include(submitDir * "RgFlow.jl")
-@everywhere include(submitDir * "Models.jl")
-@everywhere include(submitDir * "PhaseDiagram.jl")
-@everywhere include(submitDir * "Probes.jl")
-@everywhere include(submitDir * "PltStyle.jl")
+#=@everywhere include(submitDir * "Models.jl")=#
+#=@everywhere include(submitDir * "PhaseDiagram.jl")=#
+#=@everywhere include(submitDir * "Probes.jl")=#
+#=@everywhere include(submitDir * "PltStyle.jl")=#
 
 function RGFlow(
-        Wf_arr::Vector{Float64},
-        kondoPerp::Float64,
-        W::Float64,
+        couplings,
+        Wf,
+        J,
         size_BZ::Int64;
         loadData::Bool=false,
     )
-    couplings(Wf) = Dict{String, Float64}(
-                                      "omega_by_t" => OMEGA_BY_t,
-                                      "kondoF" => kondoF,
-                                      "kondoPerp" => kondoPerp,
-                                      "Wf" => Wf,
-                                      "epsilonF" => epsilonF,
-                                      "mu_c" => mu_c,
-                                      "W" => W,
-                                      "lightBandFactor" => lightBandFactor,
-                                     )
-    results = @showprogress desc="rg flow" pmap(Wf -> momentumSpaceRG(size_BZ, couplings(Wf); loadData=loadData), Wf_arr)
-
-    dispersion = results[1][3]
-    kondoJArrays = Dict{Float64, Array{Float64, 2}}()
-    kondoPerpArrays = Dict{Float64, Vector{Float64}}()
-    for (result, Wf) in zip(results, Wf_arr)
-        averageKondoScale = sum(abs.(result[1][:, :, 1])) / length(result[1][:, :, 1])
-        @assert averageKondoScale > RG_RELEVANCE_TOL
-        result[1][:, :, end] .= ifelse.(abs.(result[1][:, :, end]) ./ averageKondoScale .> RG_RELEVANCE_TOL, result[1][:, :, end], 0)
-        kondoJArrays[Wf] = result[1][:, :, end]
-        kondoPerpArrays[Wf] = result[2]
+    function insertWfJ(couplings, Wf, J)
+        couplings["W"]["f"] = Wf
+        couplings["J⟂"] = J
+        return couplings
     end
-    return kondoJArrays, kondoPerpArrays, dispersion
+    results = @showprogress desc="rg flow" pmap(p -> momentumSpaceRG(size_BZ, insertWfJ(couplings, p[1], p[2]); loadData=loadData), Iterators.product(Wf, J))
+    dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
+    FSpoints = getIsoEngCont(dispersion, 0.0)
+    fig, axes = subplots(ncols=3, nrows=2, figsize=(8, 4))
+    fig.tight_layout()
+    boolTitles = Dict("f" => "Pole fraction: ", "d" => "Pole fraction: ", "⟂" => "Rel/Irrelevance")
+    for (i, key) in enumerate(["f", "d", "⟂"])
+        ax = axes[1, i]
+        if key == "f" || key == "d"
+            keyData = [maximum(diag(abs.(r[key])[FSpoints, FSpoints])) for r in results]
+            boolData = [count(>(1e-3), abs.(diag(r[key][FSpoints, FSpoints]))) / length(FSpoints) for r in results]
+        else
+            keyData = [r[key] for r in results]
+            boolData = [ifelse(r[key]/J > 0.8, 2, ifelse(r[key]/J > 0., 1, 0)) for (r, (Wf, J)) in zip(results, Iterators.product(Wf, J))]
+        end
+        hm = ax.imshow(reshape(keyData, length(Wf), length(J)), origin="lower", extent=(extrema(J)..., extrema(-Wf)...), cmap="inferno", aspect="auto")
+        ax.set_xlabel("\$J\$")
+        ax.set_ylabel("\$|Wf|\$")
+        ax.set_title("RG flow of J$(key)", pad=10)
+        ax.set_aspect((maximum(J) - minimum(J)) / (maximum(-Wf) - minimum(-Wf)))
+        fig.colorbar(hm)
+
+        ax = axes[2, i]
+        hm = ax.imshow(reshape(boolData, length(Wf), length(J)), origin="lower", extent=(extrema(J)..., extrema(-Wf)...), cmap="inferno", aspect="auto")
+        ax.set_xlabel("\$J\$")
+        ax.set_ylabel("\$|Wf|\$")
+        ax.set_title("$(boolTitles[key]): $(key)", pad=10)
+        ax.set_aspect((maximum(J) - minimum(J)) / (maximum(-Wf) - minimum(-Wf)))
+        fig.colorbar(hm)
+    end
+    fig.tight_layout()
+    fig.savefig("PD.pdf", bbox_inches="tight")
 end
 
 
@@ -232,45 +246,47 @@ function AuxiliaryCorrelations(
     return figPaths
 end
 
-namesCorr = String[]
-namesPD = String[]
-for (kondoF, U) in Iterators.product([0.5], [5.,])
-    global impU = U
-    couplings = Dict(
-                     "mu_c" => [0.3, 0.2, 0.3],
-                     "W" => [-1.5, 0.2, 0.5],
-                     "kondoF" => [kondoF],
-                     "Wf" => [-0.4, 0.01, -0.2],
-                     "epsilonF" => [-0.5 * impU],
-                     "lightBandFactor" => [1.5],
-                     "kondoPerp" => [0.1, 0.05, 0.1],
-                    )
-    axLab = ["kondoPerp", "mu_c", "Wf", "W"]
-    @time append!(namesCorr,
-                AuxiliaryCorrelations(
-                    25,
-                    1501,
-                    couplings,
-                    axLab,
-                    Dict("SF-d0-f"=>L"\langle S_f \cdot S_{f}^\prime \rangle_\text{NN}", "SF-d0-s" => L"\langle S_f \cdot S_c \rangle", "Sdz" => L"S^z_\text{imp}", "SF-dNN"=>L"\langle S_f \cdot S_{N}\rangle", "SF-dAA" => L"\langle S_f \cdot S_{AN} \rangle", "PF" => "PF"),
-                    "sc-mz-";
-                    loadData=true,
-                   )
-               )
+RGFlow(Dict("omega_by_t" => -2., "Jf" => 0.2, "Jd" => 0.2, "J⟂" => 0., "W" => Dict("f" => 0., "d" => -0.01)), -0.02:-0.01:-0.2, 0:0.02:0.5, 33)
 
-    #=@time push!(namesPD, PhaseDiagram(=#
-    #=                25,=#
-    #=                couplings,=#
-    #=                axLab,=#
-    #=                Dict(["PF", L"J^*"]);=#
-    #=                loadData=false,=#
-    #=               ))=#
-
-    #=@time ScattProb(25,=#
-    #=                couplings,=#
-    #=                axLab;=#
-    #=                loadData=true,=#
-    #=               )=#
-end
-if !isempty(namesPD); merge_pdfs(namesPD, "PD.pdf", cleanup=true); end
-if !isempty(namesCorr); merge_pdfs(namesCorr, "Corr.pdf", cleanup=true); end
+#=namesCorr = String[]=#
+#=namesPD = String[]=#
+#=for (kondoF, U) in Iterators.product([0.5], [5.,])=#
+#=    global impU = U=#
+#=    couplings = Dict(=#
+#=                     "mu_c" => [0.3, 0.2, 0.3],=#
+#=                     "W" => [-1.5, 0.2, 0.5],=#
+#=                     "kondoF" => [kondoF],=#
+#=                     "Wf" => [-0.4, 0.01, -0.2],=#
+#=                     "epsilonF" => [-0.5 * impU],=#
+#=                     "lightBandFactor" => [1.5],=#
+#=                     "kondoPerp" => [0.1, 0.05, 0.1],=#
+#=                    )=#
+#=    axLab = ["kondoPerp", "mu_c", "Wf", "W"]=#
+#=    @time append!(namesCorr,=#
+#=                AuxiliaryCorrelations(=#
+#=                    25,=#
+#=                    1501,=#
+#=                    couplings,=#
+#=                    axLab,=#
+#=                    Dict("SF-d0-f"=>L"\langle S_f \cdot S_{f}^\prime \rangle_\text{NN}", "SF-d0-s" => L"\langle S_f \cdot S_c \rangle", "Sdz" => L"S^z_\text{imp}", "SF-dNN"=>L"\langle S_f \cdot S_{N}\rangle", "SF-dAA" => L"\langle S_f \cdot S_{AN} \rangle", "PF" => "PF"),=#
+#=                    "sc-mz-";=#
+#=                    loadData=true,=#
+#=                   )=#
+#=               )=#
+#==#
+#=    #=@time push!(namesPD, PhaseDiagram(=#=#
+#=    #=                25,=#=#
+#=    #=                couplings,=#=#
+#=    #=                axLab,=#=#
+#=    #=                Dict(["PF", L"J^*"]);=#=#
+#=    #=                loadData=false,=#=#
+#=    #=               ))=#=#
+#==#
+#=    #=@time ScattProb(25,=#=#
+#=    #=                couplings,=#=#
+#=    #=                axLab;=#=#
+#=    #=                loadData=true,=#=#
+#=    #=               )=#=#
+#=end=#
+#=if !isempty(namesPD); merge_pdfs(namesPD, "PD.pdf", cleanup=true); end=#
+#=if !isempty(namesCorr); merge_pdfs(namesCorr, "Corr.pdf", cleanup=true); end=#
