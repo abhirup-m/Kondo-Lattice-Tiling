@@ -9,7 +9,8 @@
 #SBATCH --time=24:00:00                        # Maximum runtime (D-HH:MM:SS)
 
 ENV["PYCALL_GC_FINALIZE"] = "0"
-using Distributed, PDFmerger, ProgressMeter, PyPlot
+using Distributed
+@everywhere using PDFmerger, ProgressMeter, PyPlot, LaTeXStrings
 if "SLURM_SUBMIT_DIR" in keys(ENV)
     addprocs(SlurmManager())
 end
@@ -27,49 +28,61 @@ end
 #=@everywhere include(submitDir * "Models.jl")=#
 #=@everywhere include(submitDir * "PhaseDiagram.jl")=#
 #=@everywhere include(submitDir * "Probes.jl")=#
-#=@everywhere include(submitDir * "PltStyle.jl")=#
+@everywhere include(submitDir * "PltStyle.jl")
 
 function RGFlow(
         couplings,
         Wf,
         J,
+        μ,
         size_BZ::Int64;
         loadData::Bool=false,
     )
-    function insertWfJ(couplings, Wf, J)
-        couplings["W"]["f"] = Wf
+    function insertWfJ(couplings, Wf, J, μ)
+        couplings["Wf"] = Wf
         couplings["J⟂"] = J
+        couplings["μ"] = μ
         return couplings
     end
-    results = @showprogress desc="rg flow" pmap(p -> momentumSpaceRG(size_BZ, insertWfJ(couplings, p[1], p[2]); loadData=loadData), Iterators.product(Wf, J))
+    sparseWf = length(Wf) ≥ 20 ? Wf[1:div(length(Wf), 10):end] : Wf
+    sparseJ = length(J) ≥ 20 ? J[1:div(length(J), 10):end] : J
+    parameters = Iterators.product(Wf, J)
+    sparseParameters = Iterators.product(sparseWf, sparseJ)
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
     FSpoints = getIsoEngCont(dispersion, 0.0)
-    fig, axes = subplots(ncols=3, nrows=2, figsize=(8, 4))
+    fig, axes = subplots(ncols=3, nrows=length(μ), figsize=(20, 3.5 * length(μ)))
     fig.tight_layout()
-    boolTitles = Dict("f" => "Pole fraction: ", "d" => "Pole fraction: ", "⟂" => "Rel/Irrelevance")
-    for (i, key) in enumerate(["f", "d", "⟂"])
-        ax = axes[1, i]
-        if key == "f" || key == "d"
-            keyData = [maximum(diag(abs.(r[key])[FSpoints, FSpoints])) for r in results]
-            boolData = [count(>(1e-3), abs.(diag(r[key][FSpoints, FSpoints]))) / length(FSpoints) for r in results]
-        else
-            keyData = [r[key] for r in results]
-            boolData = [ifelse(r[key]/J > 0.8, 2, ifelse(r[key]/J > 0., 1, 0)) for (r, (Wf, J)) in zip(results, Iterators.product(Wf, J))]
+    boolTitles = Dict("f" => L"Pole fraction: $J_f$", "d" => L"Pole fraction: $J_d$", "⟂" => L"Rel/Irrelevance: $J_\perp$")
+    for (j, μ_i) in enumerate(μ)
+        results = @showprogress desc="rg flow" pmap(p -> momentumSpaceRG(size_BZ, insertWfJ(couplings, p[1], p[2], μ_i); loadData=loadData), parameters)
+        for (i, key) in enumerate(["f", "d", "⟂"])
+            ax = axes[j, i]
+            if key == "f" || key == "d"
+                keyData = [maximum(diag(abs.(r[key])[FSpoints, FSpoints])) for r in results]
+                boolData = [count(>(1e-3), abs.(diag(r[key][FSpoints, FSpoints]))) / length(FSpoints) for r in results]
+            else
+                keyData = [r[key] for r in results]
+                boolData = [ifelse(r[key]/J > 0.8, 1, ifelse(r[key]/J > 0., 0.5, 0)) for (r, (Wf, J)) in zip(results, Iterators.product(Wf, J))]
+            end
+            hm = ax.imshow(reshape(keyData, length(Wf), length(J)), origin="lower", extent=(extrema(J)..., extrema(-Wf)...), cmap=CMAP, aspect="auto")
+            sparseColors = [b for (b, (Wfi, Ji)) in zip(boolData, parameters) if Wfi ∈ sparseWf && Ji ∈ sparseJ] # map(p -> ifelse(p[2][1] ∈ sparseWf && p[2][2] ∈ sparseJ, p[1], nothing), zip(boolData, parameters))
+            sparseX = [Ji for (Wfi, Ji) in parameters if Wfi ∈ sparseWf && Ji ∈ sparseJ]
+            sparseY = [-Wfi for (Wfi, Ji) in parameters if Wfi ∈ sparseWf && Ji ∈ sparseJ]
+            sc = ax.scatter(sparseX, sparseY, c=sparseColors, s=10, cmap=CMAP, alpha=0.8)
+            #=sc.set_facecolor("none")=#
+            #=sc.set_edgecolor("black")=#
+            ax.set_xlabel(L"$J$")
+            ax.set_ylabel(L"$|Wf|$")
+            if j == 1
+                ax.set_title(L"RG flow of $J_%$(key)$", pad=10)
+            end
+            if i == 1
+                ax.text(-1.0, 0.5, L"$\mu=%$(μ_i)$", horizontalalignment="center", verticalalignment="center", transform=ax.transAxes)
+            end
+            ax.set_aspect((maximum(J) - minimum(J)) / (maximum(-Wf) - minimum(-Wf)))
+            fig.colorbar(hm, shrink=0.5, pad=-0.3, label=L"$g^*$")
+            fig.colorbar(sc, location="left", shrink=0.5, pad=0.22, label=L"$g > 0$",)
         end
-        hm = ax.imshow(reshape(keyData, length(Wf), length(J)), origin="lower", extent=(extrema(J)..., extrema(-Wf)...), cmap="inferno", aspect="auto")
-        ax.set_xlabel("\$J\$")
-        ax.set_ylabel("\$|Wf|\$")
-        ax.set_title("RG flow of J$(key)", pad=10)
-        ax.set_aspect((maximum(J) - minimum(J)) / (maximum(-Wf) - minimum(-Wf)))
-        fig.colorbar(hm)
-
-        ax = axes[2, i]
-        hm = ax.imshow(reshape(boolData, length(Wf), length(J)), origin="lower", extent=(extrema(J)..., extrema(-Wf)...), cmap="inferno", aspect="auto")
-        ax.set_xlabel("\$J\$")
-        ax.set_ylabel("\$|Wf|\$")
-        ax.set_title("$(boolTitles[key]): $(key)", pad=10)
-        ax.set_aspect((maximum(J) - minimum(J)) / (maximum(-Wf) - minimum(-Wf)))
-        fig.colorbar(hm)
     end
     fig.tight_layout()
     fig.savefig("PD.pdf", bbox_inches="tight")
@@ -246,7 +259,7 @@ function AuxiliaryCorrelations(
     return figPaths
 end
 
-RGFlow(Dict("omega_by_t" => -2., "Jf" => 0.2, "Jd" => 0.2, "J⟂" => 0., "W" => Dict("f" => 0., "d" => -0.01)), -0.02:-0.01:-0.2, 0:0.02:0.5, 33)
+RGFlow(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.2, "Jd" => 0.2, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), 0:-0.01:-0.2, 0:0.02:0.4, 0:1.5:3, 49; loadData=true)
 
 #=namesCorr = String[]=#
 #=namesPD = String[]=#

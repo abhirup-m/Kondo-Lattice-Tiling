@@ -320,7 +320,7 @@ end
 function SavePath(
         prefix::String,
         size_BZ::Int64,
-        couplings::Dict{String, Float64},
+        couplings::Dict,
         extension::String;
         maxSize::Int64=0
     )
@@ -328,14 +328,14 @@ function SavePath(
     if extension[1] ≠ '.'
         extension = "." * extension
     end
-    path = "$(prefix)-$(size_BZ)"
+    path = "$(prefix)_$(size_BZ)"
 
-    coupNames = ["omega_by_t", "kondoF", "kondoPerp", "Wf", "W", "epsilonF", "mu_c", "lightBandFactor"]
-    for k in filter(∈(keys(couplings)), coupNames)
-        path *= "-$(couplings[k])"
+    coupNames = ["omega_by_t", "Jf", "Jd", "J⟂", "Wf", "Wd", "μ"]
+    for k in coupNames
+        path *= "_$(couplings[k])"
     end
     if maxSize > 0
-        path *= "-$(maxSize)"
+        path *= "_$(maxSize)"
     end
     return path*"$(extension)"
 end

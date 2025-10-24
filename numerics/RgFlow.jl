@@ -1,4 +1,4 @@
-using LinearAlgebra, JLD2
+using LinearAlgebra, JLD2, JSON3
 
 function initialiseKondoJ(
         size_BZ::Int64, 
@@ -63,22 +63,16 @@ end
     kxVals = first.(kvals)
     kyVals = last.(kvals)
     omega_by_t = bareCouplings["omega_by_t"]
-    W = bareCouplings["W"]
+    μ = bareCouplings["μ"]
+    W = Dict("f" => bareCouplings["Wf"], "d" => bareCouplings["Wd"])
 
-    #=savePath = joinpath(SAVEDIR, SavePath("rgflow", size_BZ, couplings, "jld2"))=#
-    #=mkpath(SAVEDIR)=#
-    #=if isfile(savePath) && loadData=#
-    #=    _, dispersionArray = getDensityOfStates(tightBindDisp, size_BZ)=#
-    #=    kondoJArray = zeros(size_BZ^2, size_BZ^2)=#
-    #=    kondoPerpArray = nothing=#
-    #=    jldopen(savePath, "r") do f=#
-    #=        kondoJArray = f["kondoRenorm"]=#
-    #=        kondoPerpArray = f["kondoPerpArray"]=#
-    #=    end=#
-    #==#
-    #=    return kondoJArray, kondoPerpArray, dispersionArray=#
-    #=end=#
-    #==#
+    saveJLD = joinpath(SAVEDIR, SavePath("rgflow", size_BZ, bareCouplings, "jld2"))
+    saveJSON = joinpath(SAVEDIR, SavePath("rgflow", size_BZ, bareCouplings, "json"))
+    mkpath(SAVEDIR)
+    if isfile(saveJLD) && loadData
+        return load(saveJLD)
+    end
+
 
     # ensure that [0, \pi] has odd number of states, so 
     # that the nodal point is well-defined.
@@ -128,7 +122,11 @@ end
         GVector = zeros(length(cutoffPoints))
         for (i_q, (q, qbar)) in enumerate(zip(cutoffPoints, cutoffHolePoints))
             for k in ["f", "d"]
-                GMatrix[k][q, q] = densityOfStates[q] * (0.25 / (omega_by_t * HOP_T - energyCutoff / 2 + couplings[k][q, q] / 4 + W[k] / 2 + 0.75 * couplings["⟂"]) + 0.75 / (omega_by_t * HOP_T - energyCutoff / 2 + couplings[k][q, q] / 4 + W[k] / 2 - 0.25 * couplings["⟂"]))
+                GMatrix[k][q, q] = densityOfStates[q] * ((1/8) / (omega_by_t * HOP_T - energyCutoff / 2 + μ / 2 + couplings[k][q, q] / 4 + W[k] / 2 + 0.75 * couplings["⟂"]) 
+                                                         + (3/8) / (omega_by_t * HOP_T - energyCutoff / 2 + μ / 2 + couplings[k][q, q] / 4 + W[k] / 2 - 0.25 * couplings["⟂"])
+                                                         + (1/8) / (omega_by_t * HOP_T - energyCutoff / 2 - μ / 2 + couplings[k][qbar, qbar] / 4 + W[k] / 2 + 0.75 * couplings["⟂"]) 
+                                                         + (3/8) / (omega_by_t * HOP_T - energyCutoff / 2 - μ / 2 + couplings[k][qbar, qbar] / 4 + W[k] / 2 - 0.25 * couplings["⟂"])
+                                                        )
             end
             GVector[i_q] = sum([densityOfStates[q] / (omega_by_t * HOP_T - 0.5 * (dispersionArray[q] - dispersionArray[qbar]) + couplings[k][q, q] / 2 + W[k] - 0.25 * couplings["⟂"]) for k in ["f", "d"]])
         end
@@ -166,8 +164,8 @@ end
         end
         #=println("-------")=#
     end
-    #=if saveData=#
-    #=    jldsave(savePath, true; kondoRenorm=kondoJArray[:, :, end], kondoPerpArray=kondoPerpArray)=#
-    #=end=#
+    if saveData
+        save(saveJLD, couplings)
+    end
     return couplings
 end
