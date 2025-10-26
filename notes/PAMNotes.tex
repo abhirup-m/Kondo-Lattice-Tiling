@@ -222,7 +222,7 @@ For every shell of conduction bath states of width \(\Delta D\) integrated out, 
 \end{aligned}\end{equation}
 where \({\bf q}\) sums over the UV states being integrated out, \(\rho({\bf q})\) is the density of states for the momentum states being integrated out and \(G_f^{(0)}\) is the propagator for the excited intermediate state (for \(J=0\)):
 \begin{equation}\begin{aligned}
-	G_f^{(0)}({\bf q}) = \frac{1}{\omega - \epsilon_f({\bf q}) / 2 + J_f({\bf q}) / 4 + W_f({\bf q}) / 2}~.))
+	G_f^{(0)}({\bf q}) = \frac{1}{\omega - |\epsilon_f({\bf q})| / 2 + J_f({\bf q}) / 4 + W_f({\bf q}) / 2}~.
 \end{aligned}\end{equation}
 An identical equations holds for \(\Delta J_d\), with al \(f-\)quantities replaced with \(d-\)quantities. Switching on \(J\) modifies the excitation energy in the propagator:
 \begin{equation}\begin{aligned}
@@ -257,7 +257,7 @@ where \(\ket{L} = \ket{L}_f \ket{L}_d\) is the initial configuration for both la
 \end{aligned}\end{equation}
 where \(H_D\) is the diagonal part of the Hamiltonian corresponding to the excited(intermediate) state. The diagonal part consists of the kinetic energy and the Ising part of the Kondo interaction:
 \begin{equation}\begin{aligned}
-	H_D = \sum_{{\bf q,\sigma}\in{\bf q}_\pm, \alpha}\epsilon_\alpha({\bf q})\tau_{{\bf q},\sigma} + \sum_\alpha J_\alpha S_\alpha^z \sum_{{\bf q},\sigma}\sigma n_{{\bf q},\sigma,\alpha} + J \vec{S}_f \cdot \vec{S}_d~.
+	H_D = \sum_{{\bf q,\sigma}\in{\bf q}_\pm, \alpha}\epsilon_\alpha({\bf q})\tau_{{\bf q},\sigma} + \frac{1}{2}\sum_\alpha J_\alpha S_\alpha^z \sum_{{\bf q},\sigma}\sigma n_{{\bf q},\sigma,\alpha} + J \vec{S}_f \cdot \vec{S}_d~.
 \end{aligned}\end{equation}
 Calculating the matrix elements of the propagator in the rotated basis gives
 \begin{equation}\begin{aligned}\label{PGP}
@@ -291,7 +291,7 @@ where \(\bar\epsilon_\alpha({\bf q}) = \epsilon_f({\bf q}) - \epsilon_f(\bar{\bf
 \section{RG flow simulation on the \(d=\infty\) Bethe lattice at half-filling}
 \includegraphics[width=\textwidth]{bilayerHubbard.pdf}
 
-\section{RG flow simulation on the 2D square lattice at half-filling}
+\section{RG flow simulation on the 2D square lattice}
 Kondo coupling and bath interaction acquire \(k-\)dependence:
 \begin{equation}\begin{aligned}
 	J({\bf k}, {\bf q}) &= \frac{J}{2}\left[\cos({\bf k}_x - {\bf q}_x) + \cos({\bf k}_y - {\bf q}_y)\right]~,\\
@@ -299,20 +299,34 @@ Kondo coupling and bath interaction acquire \(k-\)dependence:
 \end{aligned}\end{equation}
 The particle-hole transformed state \(\bar{\bf q}\) associated with \({\bf q}\) is defined as \(\bar {\bf q} = {\bf q} + \left(\pi, \pi\right)\) if \({\bf q}\) is in the first or third quadrant and \({\bf q} + \left(\pi, -\pi\right)\) is in the second or fourth quadrant.
 
+We first introduce a non-zero chemical potential in the conduction bath of the two layer:
+\begin{equation}\begin{aligned}
+	H_\text{aux} &= \sum_{{\bf k},\sigma,\alpha}\left(\epsilon_{{\bf k},\alpha} - \mu\right)n_{{\bf k},\sigma,\alpha} + \sum_\alpha\sum_{Z \in \text{NN}}\left[\frac{1}{2}J_\alpha\sum_{\sigma,\sigma^\prime}{\bf S}_\alpha \cdot {\boldsymbol{\sigma}}_{\alpha\beta}c^\dagger_{Z,\sigma,\alpha}c_{Z,\sigma^\prime,\alpha} - \frac{W_\alpha}{2} \left(n_{Z,\uparrow,\alpha} - n_{Z,\downarrow,\alpha}\right)^2\right] + J{\bf S}_f \cdot {\bf S}_d~.
+\end{aligned}\end{equation}
+The effect of this is to split the RG equation into contributions from particle and hole sectors:
+\begin{equation}\begin{aligned}
+	&\frac{\Delta J_\alpha}{\Delta D} =\\
+	& \frac{1}{2}\int_{PS} d{\bf q} ~\rho({\bf q}) \left[J_\alpha({\bf k}_1, {\bf q})J_\alpha({\bf q}, {\bf k}_2) + J_\alpha({\bf q}, \bar {\bf q})W_\alpha({\bf k}_1, {\bf q}, \bar {\bf q}, {\bf k}_2)\right]\left(\frac{1/4}{1/G_\alpha^{(0)}({\bf q}) + \mu/2 + 3J/4} + \frac{3/4}{1/G_\alpha^{(0)}({\bf q}) + \mu/2 - J/4}\right)\\
+									  &+ \frac{1}{2}\int_{HS} d{\bf q} ~\rho({\bf q}) \left[J_\alpha({\bf k}_1, {\bf q})J_\alpha({\bf q}, {\bf k}_2) + J_\alpha({\bf q}, \bar {\bf q})W_\alpha({\bf k}_1, {\bf q}, \bar {\bf q}, {\bf k}_2)\right]\left(\frac{1/4}{1/G_\alpha^{(0)}({\bf q}) - \mu/2 + 3J/4} + \frac{3/4}{1/G_\alpha^{(0)}({\bf q}) - \mu/2 - J/4}\right)~,
+\end{aligned}\end{equation}
+where \(PS\) and \(HS\) integrate over the particle and hole sectors of the excited states (where the excited states are occupied and unoccupied respectively).
+
 Since the bath interaction doesn't renormalise, it's functional form remains unchanged and can be substituted into the RG equations. In fact, we can write the expressions in a compact matrix form for efficient computation:
 \begin{equation}\begin{aligned}
 	\frac{\Delta J_\alpha}{\Delta D} = J_\alpha \mathcal{G}_\alpha J_\alpha^\dagger + \mathcal{W}_\alpha\text{Tr}\left[\mathcal{G}^\prime_\alpha\right]~,
 \end{aligned}\end{equation}
 where all objects are matrices. \(J_\alpha\) is the Kondo coupling matrix. \(\mathcal{G}_\alpha\) is a diagonal matrix with matrix elements 
 \begin{equation}\begin{aligned}
-\mathcal{G}_\alpha[q, q] = \rho(q) \left(\frac{1}{4}\frac{1}{1/G_\alpha^{(0)}({\bf q}) + 3J/4} + \frac{3}{4}\frac{1}{1/G_\alpha^{(0)}({\bf q}) - J/4}\right)~,
+\mathcal{G}_\alpha[q, q] = \begin{cases}
+	\rho(q) \left(\frac{1}{8}\frac{1}{1/G_\alpha^{(0)}({\bf q}) + \mu/2 + 3J/4} + \frac{3}{8}\frac{1}{1/G_\alpha^{(0)}({\bf q}) + \mu/2 - J/4}\right),~{\bf q}\in\text{PS}~,\\
+\rho(q) \left(\frac{1}{8}\frac{1}{1/G_\alpha^{(0)}({\bf q}) - \mu/2 + 3J/4} + \frac{3}{8}\frac{1}{1/G_\alpha^{(0)}({\bf q}) - \mu/2 - J/4}\right),~{\bf q}\in\text{HS}~~,
+\end{cases}
 \end{aligned}\end{equation}
 if \(q\) is in the UV subspace and zero otherwise. \(\mathcal{W}_\alpha\) is the bath interaction matrix whose matrix elements are given by \(\mathcal{W}_\alpha[k, k^\prime] = \frac{W}{2}\left[\cos(k_x - k^\prime_x) + \cos(k_y - k^\prime_y)\right]\). Finally, \(\mathcal{G}^\prime_\alpha\) is another diagonal matrix whole matrix elements are defined as \(\mathcal{G}^\prime_\alpha[q,q] = \mathcal{G}[q, q] J_\alpha[q,\bar q]\).
 
 The RG equation for the inter-layer coupling \(J\) can be written as
 \begin{equation}\begin{aligned}
 	\frac{\Delta J}{\Delta D} &= \frac{1}{2} {\bf J} \cdot \mathcal{\bf G}~,
-	% \frac{1}{2}\int_{UV} d{\bf q} ~\rho({\bf q}) \left[\frac{J_f(\bar{\bf q},{\bf q}) J_d({\bf q},\bar{\bf q})}{\omega - \frac{1}{2}\bar\epsilon_f({\bf q}) + \frac{1}{2}J_f({\bf q}) + W_f({\bf q}) - \frac{1}{4}J} + \frac{J_f(\bar{\bf q},{\bf q}) J_d({\bf q},\bar{\bf q})}{\omega - \frac{1}{2}\bar\epsilon_d({\bf q}) + \frac{1}{2}J_d({\bf q}) + W_d({\bf q}) - \frac{1}{4}J}\right]~,
 \end{aligned}\end{equation}
 where \({\bf J}\) and \(\mathcal{\bf G}\) are vectors defined by the elements \({\bf J}[q] = J_f(\bar{\bf q},{\bf q}) J_d({\bf q},\bar{\bf q})\) and 
 \begin{equation}\begin{aligned}
