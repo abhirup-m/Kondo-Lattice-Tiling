@@ -141,48 +141,57 @@ We will now obtain a more minimal representation of this interaction. Each momen
 	&= \sum_{\bf q}\left[\sum_{{\bf k} \in \mathcal{Q}_1,\mathcal{Q}_2} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha} + \sum_{{\bf k} \in \mathcal{Q}_1} J_f^*({\bf k - Q_1},{\bf q}) f^\dagger_{{\bf k - Q_1},\alpha} + \sum_{{\bf k} \in \mathcal{Q}_2} J_f^*({\bf k + Q_2},{\bf q}) f^\dagger_{{\bf k + Q_2},\alpha}\right] f_{{\bf q},\beta}\\
 	&= \sum_{\bf q}\left[\sum_{{\bf k} \in \mathcal{Q}_1} J_f^*({\bf k},{\bf q}) \left(f^\dagger_{{\bf k},\alpha} - f^\dagger_{{\bf k - Q_1},\alpha}\right) + \sum_{{\bf k} \in \mathcal{Q}_2} J_f^*({\bf k},{\bf q}) \left(f^\dagger_{{\bf k},\alpha} - f^\dagger_{{\bf k + Q_2},\alpha}\right) \right] f_{{\bf q},\beta}~.
 \end{aligned}\end{equation}
-For ease of notation, we define new fermionic operators \(A_{{\bf k},\sigma}\) and \(B_{{\bf k},\sigma}\):
+For ease of notation, we define new fermionic operators \(A_{{\bf k},\sigma}\):
 \begin{equation}\begin{aligned}\label{defineA}
-	A_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} \pm f_{{\bf k - Q_1},\sigma}\right), {\bf k}\in\mathcal{Q}_1~,\\
-	B_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} \pm f_{{\bf k + Q_2},\sigma}\right), {\bf k}\in\mathcal{Q}_2~,
+	A_{{\bf k},\sigma,\pm} = \begin{cases}
+		\frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} \pm f_{{\bf k - Q_1},\sigma}\right), {\bf k}\in\mathcal{Q}_1~,\\
+		\frac{1}{\sqrt{2}}\left(f_{{\bf k},\sigma} \pm f_{{\bf k + Q_2},\sigma}\right), {\bf k}\in\mathcal{Q}_2~,
+	\end{cases}
 \end{aligned}\end{equation}
-which satisfy the appropriate algebra: \(\left\{A_{{\bf k},\sigma, p}, A_{{\bf k}^\prime,\sigma^\prime, p^\prime}\right\} = \left\{B_{{\bf k},\sigma, p}, B_{{\bf k}^\prime,\sigma^\prime, p^\prime}\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\delta{p, p^\prime}\) and \(\left\{A_{{\bf k},\sigma,p}, B_{{\bf k}^\prime,\sigma^\prime,p^\prime}\right\} = 0\), with \(p=\pm\) denoting the flavours of the \(A\) and \(B\) fields. Note that only the \(p=-1\) flavour enters the Hamiltonian. Henceforth, we drop the label \(\pm\) and it is implied that \(A\) and \(B\) refer to the \(p=-1\) variants.
+which satisfy the appropriate algebra: \(\left\{A_{{\bf k},\sigma, p}, A_{{\bf k}^\prime,\sigma^\prime, p^\prime}\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\delta{p, p^\prime}\), with \(p=\pm\) denoting the flavours of the \(A\) fields. Note that only the \(p=-1\) flavour enters the Hamiltonian. Henceforth, we drop the label \(\pm\) and it is implied that \(A\) refers to the \(p=-1\) variant.
 
 Decomposing the sum over \({\bf q}\) in a similar fashion, we get
-\begin{equation}\begin{aligned}
+\begin{equation}\begin{aligned}\label{kondoAB}
 	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
-	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + 2\sum_{{\bf k} \in \mathcal{Q}_2, {\bf q} \in \mathcal{Q}_1} J_f^*({\bf k},{\bf q}) B^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} \\
-	&+ 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_2} J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}B_{{\bf q},\beta} + 2\sum_{{\bf k} \in \mathcal{Q}_2, {\bf q} \in \mathcal{Q}_2} J_f^*({\bf k},{\bf q}) B^\dagger_{{\bf k},\alpha}B_{{\bf q},\beta}~.
+	&= 2\sum_{{\bf k}, {\bf q} \in \mathcal{Q}_1, \mathcal{Q}_2} J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta}~.
 \end{aligned}\end{equation}
 
-To further simplify things, We first replace the summations over \(\mathcal{Q}_2\) with that over \(\mathcal{Q}_1\), with the mapping \({\bf q} \to {\bf \bar q}\) and use eq.~\ref{adjacent}:
-\begin{equation}\begin{aligned}
-	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
-	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + J_f^*({\bf \bar k},{\bf q}) B^\dagger_{{\bf k},\alpha}A_{{\bf \bar q},\beta} + J_f^*({\bf k},{\bf \bar q}) A^\dagger_{{\bf k},\alpha}B_{{\bf \bar q},\beta} + J_f^*({\bf \bar k},{\bf \bar q}) B^\dagger_{{\bf \bar k},\alpha}B_{{\bf \bar q},\beta}\right]\\
-	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[J_f^*({\bf k},{\bf q}) \left(A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + B^\dagger_{{\bf \bar k},\alpha}B_{{\bf \bar q},\beta}\right) + J_f^*({\bf \bar k},{\bf q}) \left(B^\dagger_{{\bf k},\alpha}A_{{\bf \bar q},\beta} + A^\dagger_{{\bf k},\alpha}B_{{\bf \bar q},\beta}\right)\right] ~.
-\end{aligned}\end{equation}
-To remove all explicit references to operators in \(\mathcal{Q}_2\), we define a new set of operators:
-\begin{equation}\begin{aligned}\label{defineGamma}
-	\gamma_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma,-} \pm B_{{\bf \bar k},\sigma,-}\right), {\bf k}\in \mathcal{Q}_1~,\\
-	\phi_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma,+} \pm B_{{\bf \bar k},\sigma,+}\right), {\bf k}\in \mathcal{Q}_1~,
-\end{aligned}\end{equation}
-where we have restored the \(p\)-values into the \(A\) and \(B\) fields in order to define two new fermionic fields: \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\pm}^\dagger\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\), \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\mp}^\dagger\right\} = 0\). In terms of these new fields, we finally obtain a Hamiltonian which is defined purely in the first quadrant \(\mathcal{Q}_1\) (this is however mostly formal because there are now twice as many modes on \(\mathcal{Q}_1\) than before):
-\begin{equation}\begin{aligned}
-	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
-	&= \sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[\left[J_f^*({\bf k},{\bf q}) + J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,+}\gamma_{{\bf q},\alpha,+} + \left[J_f^*({\bf k},{\bf q}) - J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,-}\gamma_{{\bf q},\alpha,-}\right] \\
-\end{aligned}\end{equation}
+% To further simplify things, We first replace the summations over \(\mathcal{Q}_2\) with that over \(\mathcal{Q}_1\), with the mapping \({\bf q} \to {\bf \bar q}\) and use eq.~\ref{adjacent}:
+% \begin{equation}\begin{aligned}
+% 	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
+% 	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + J_f^*({\bf \bar k},{\bf q}) B^\dagger_{{\bf k},\alpha}A_{{\bf \bar q},\beta} + J_f^*({\bf k},{\bf \bar q}) A^\dagger_{{\bf k},\alpha}B_{{\bf \bar q},\beta} + J_f^*({\bf \bar k},{\bf \bar q}) B^\dagger_{{\bf \bar k},\alpha}B_{{\bf \bar q},\beta}\right]\\
+% 	&= 2\sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[J_f^*({\bf k},{\bf q}) \left(A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} + B^\dagger_{{\bf \bar k},\alpha}B_{{\bf \bar q},\beta}\right) + J_f^*({\bf \bar k},{\bf q}) \left(B^\dagger_{{\bf k},\alpha}A_{{\bf \bar q},\beta} + A^\dagger_{{\bf k},\alpha}B_{{\bf \bar q},\beta}\right)\right] ~.
+% \end{aligned}\end{equation}
+% To remove all explicit references to operators in \(\mathcal{Q}_2\), we define a new set of operators:
+% \begin{equation}\begin{aligned}\label{defineGamma}
+% 	\gamma_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma,-} \pm B_{{\bf \bar k},\sigma,-}\right), {\bf k}\in \mathcal{Q}_1~,\\
+% 	\phi_{{\bf k},\sigma,\pm} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma,+} \pm B_{{\bf \bar k},\sigma,+}\right), {\bf k}\in \mathcal{Q}_1~,
+% \end{aligned}\end{equation}
+% where we have restored the \(p\)-values into the \(A\) and \(B\) fields in order to define two new fermionic fields: \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\pm}^\dagger\right\} = \delta_{{\bf k},{\bf k}^\prime}\delta_{\sigma,\sigma^\prime}\), \(\left\{\gamma_{{\bf k},\sigma,\pm}, \gamma_{{\bf k}^\prime,\sigma^\prime,\mp}^\dagger\right\} = 0\). In terms of these new fields, we finally obtain a Hamiltonian which is defined purely in the first quadrant \(\mathcal{Q}_1\) (this is however mostly formal because there are now twice as many modes on \(\mathcal{Q}_1\) than before):
+% \begin{equation}\begin{aligned}
+% 	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) f^\dagger_{{\bf k},\alpha}f_{{\bf q},\beta} 
+% 	&= \sum_{{\bf k} \in \mathcal{Q}_1, {\bf q} \in \mathcal{Q}_1} \left[\left[J_f^*({\bf k},{\bf q}) + J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,+}\gamma_{{\bf q},\alpha,+} + \left[J_f^*({\bf k},{\bf q}) - J_f^*({\bf \bar k},{\bf q})\right] \gamma^\dagger_{{\bf k},\alpha,-}\gamma_{{\bf q},\alpha,-}\right] \\
+% \end{aligned}\end{equation}
 
 \section{Correlations in truncated representation}
-In order to calculate equal-time correlations (such as \(\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}} \)), we combine eqs.~\ref{defineA} and \ref{defineGamma} to express the bare fields \(f_{{\bf k},\sigma}\) in terms of the new fields \(\gamma_{{\bf k},\sigma,\pm}\) and \(\phi_{{\bf k},\sigma,\pm}\):
+In order to calculate equal-time correlations (such as \(\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}} \)), we use eq.~\ref{defineA} to express the bare fields \(f_{{\bf k},\sigma}\) in terms of the new fields \(A_{{\bf k},\sigma,\pm}\) and \(B_{{\bf k},\sigma,\pm}\):
 \begin{equation}\begin{aligned}
-	&f_{{\bf k},\sigma} = \frac{1}{2}\left(\phi_{{\bf k},\sigma,+} + \phi_{{\bf k},\sigma,-} + \gamma_{{\bf k},\sigma,+} + \gamma_{{\bf k},\sigma,-}\right), ~ &&f_{{\bf \bar k},\sigma} = \frac{1}{2}\left(\phi_{{\bf k},\sigma,+} - \phi_{{\bf k},\sigma,-} + \gamma_{{\bf k},\sigma,+} - \gamma_{{\bf k},\sigma,-}\right),\\
-	&f_{{\bf k} - {\bf Q}_1,\sigma} = \frac{1}{2}\left(\phi_{{\bf k},\sigma,+} + \phi_{{\bf k},\sigma,-} - \gamma_{{\bf k},\sigma,+} - \gamma_{{\bf k},\sigma,-}\right),~ &&f_{{\bf \bar k} + {\bf Q}_2,\sigma} = \frac{1}{2}\left(\phi_{{\bf k},\sigma,+} - \phi_{{\bf k},\sigma,-} - \gamma_{{\bf k},\sigma,+} + \gamma_{{\bf k},\sigma,-}\right),
+	f_{{\bf k},\sigma} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma, +} + A_{{\bf k},\sigma,-}\right)~,{\bf k} \in {Q}_1, Q_2\\
+	f_{{\bf k} - {\bf Q}_1,\sigma} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma, +} - A_{{\bf k},\sigma,-}\right)~,{\bf k} \in {Q}_1\\
+	f_{{\bf k} + {\bf Q}_2,\sigma} = \frac{1}{\sqrt{2}}\left(A_{{\bf k},\sigma, +} - A_{{\bf k},\sigma,-}\right)~,{\bf k} \in {Q}_2\\
 \end{aligned}\end{equation}
-where the four relations act on operators in four quadrants. Suppose that both \({\bf k}\) and \({\bf k}^\prime\) in the correlation \(\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}}\) are from the first quadrant. Since the fields \(\phi\) do not appear in the Hamiltonian, they will not contribute to the correlation measures in the absence of symmetry breaking and entanglement. As an example, the correlation defined above can be expressed as
+where the four relations act on operators in four quadrants. These relations allow us to express correlations \(F_{k_i, k_j} = \braket{S_d^+ c^\dagger_{k_i, \uparrow}c_{k_j, \downarrow}}\) for the bare fields \(f\) in terms of the rotated fields. Using the fact that the Hamiltonian does not couple the fields \(B_{+}\) and \(A_{+}\), we have
 \begin{equation}\begin{aligned}
-	\braket{S_d^+ f^\dagger_{{\bf k}\downarrow}f_{{\bf k}^\prime \uparrow}} = \frac{1}{4}\braket{S_d^+ (\gamma^\dagger_{{\bf k},\downarrow,+} + \gamma^\dagger_{{\bf k},\downarrow,-})(\gamma_{{\bf k}^\prime,\uparrow,+} + \gamma_{{\bf k}^\prime,\uparrow,-})}~,
+	F_{k_1, k_1} = F_{k_3, k_3} = -F_{k_1, k_3} = \frac{1}{4}\braket{S_d^+ A^\dagger_{k_1,\downarrow,-}A_{k_1,\uparrow,-})}~,\\
+	F_{k_2, k_2} = F_{k_4, k_4} = -F_{k_2, k_4} = \frac{1}{4}\braket{S_d^+ A^\dagger_{k_2,\downarrow,-}A_{k_2,\uparrow,-})}~,\\
+	F_{k_1, k_2} = F_{k_3, k_4} = -F_{k_1, k_4} = -F_{k_2, k_3} = \frac{1}{4}\braket{S_d^+ A^\dagger_{k_1,\downarrow,-}A_{k_1,\uparrow,-})}~,
 \end{aligned}\end{equation}
-and so can be computed from the four correlations \(\braket{S_d^+ \gamma^\dagger_{{\bf k},\downarrow,\pm} \gamma_{{\bf k}^\prime,\uparrow,\pm}}\).
+where the momentum state \(k_i\) belongs to the quadrant \(Q_i\).
+
+\section{Effective Star Graph Representation of Kondo Interaction}
+To make computation less intensive, we want to make the Hamiltonian in eq.~\ref{kondoAB} sparser, by going to a star graph representation where each node of the graph couples only with the impurity spin (central node) and not to the other nodes of the graph. Let these modified fermions \(\gamma\) be \(\)
+
+
 
 \section{Bilayer extended Hubbard model: Impurity model}
 We approach the heavy-fermion problem by starting from a bilayer extended Hubbard model, consisting of two layers (\(f\) and \(c\)). Towards studying this lattice model, we adopt a two-layer impurity problem that hosts a correlated impurity site in each layer (\(S_f\) and \(S_d\)):
