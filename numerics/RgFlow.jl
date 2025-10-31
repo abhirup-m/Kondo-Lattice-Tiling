@@ -91,6 +91,10 @@ end
                      "d" => initialiseKondoJ(size_BZ, div(size_BZ + 1, 2), bareCouplings["Jd"]),
                      "⟂" => bareCouplings["J⟂"],
                 )
+    if couplings["⟂"] == 0
+        couplings["⟂"] = 1e-3
+    end
+
     initSigns = Dict(k => sign.(v) for (k, v) in couplings)
 
     # define flags to track whether the RG flow for a particular J_{k1, k2} needs to be stopped 
@@ -102,13 +106,15 @@ end
 
     initDeltaSigns = Dict("d" => repeat([1.], size_BZ^2, size_BZ^2),
                           "f" => repeat([1.], size_BZ^2, size_BZ^2),
-                          "⟂" => 1
+                          "⟂" => 1.
                          )
     #=initDeltaSignPerp = 1=#
 
     GMatrix = Dict(k => 0 .* couplings[k] for k in ["f", "d"])
     WMatrix = 0.5 .* (cos.(kxVals' .- kxVals) .+ cos.(kyVals' .- kyVals))
+    node = map2DTo1D(π/2, π/2, size_BZ)
     for (stepIndex, energyCutoff) in enumerate(cutOffEnergies[1:end-1])
+        #=println(couplings["d"][node, node], node)=#
         deltaEnergy = abs(cutOffEnergies[stepIndex+1] - cutOffEnergies[stepIndex])
 
         # if there are no enabled flags (i.e., all are zero), stop the RG flow
@@ -117,8 +123,8 @@ end
         end
 
         innerIndices, cutoffPoints, cutoffHolePoints, proceedFlags = highLowSeparation(dispersionArray, energyCutoff, proceedFlags, size_BZ)
-        GMatrix["f"] .= 0
-        GMatrix["d"] .= 0
+        GMatrix["f"] .= 0.
+        GMatrix["d"] .= 0.
         GVector = zeros(length(cutoffPoints))
         for (i_q, (q, qbar)) in enumerate(zip(cutoffPoints, cutoffHolePoints))
             for k in ["f", "d"]
@@ -144,25 +150,24 @@ end
             initDeltaSigns["⟂"] = sign(delta["⟂"])
         else
             for k in ["f", "d"]
-                initDeltaSigns[k][innerIndices[k], innerIndices[k]][sign.(delta[k]) .* initDeltaSigns[k][innerIndices[k], innerIndices[k]] .< 0] .= 0
-                delta[k][initDeltaSigns[k][innerIndices[k], innerIndices[k]] .== 0] .= 0
+                initDeltaSigns[k][innerIndices[k], innerIndices[k]][sign.(delta[k]) .* initDeltaSigns[k][innerIndices[k], innerIndices[k]] .< 0] .= 0.
+                delta[k][initDeltaSigns[k][innerIndices[k], innerIndices[k]] .== 0] .= 0.
             end
             if sign(delta["⟂"]) * initDeltaSigns["⟂"] < 0
-                initDeltaSigns["⟂"] = 0
-                delta["⟂"] = 0
+                initDeltaSigns["⟂"] = 0.
+                delta["⟂"] = 0.
             end
         end
         for k in ["f", "d"]
             couplings[k][innerIndices[k], innerIndices[k]] .+= delta[k]
             proceedFlags[k][innerIndices[k], innerIndices[k]] .= couplings[k][innerIndices[k], innerIndices[k]] .* initSigns[k][innerIndices[k], innerIndices[k]] .≤ 0
-            couplings[k][sign.(couplings[k]) .* initSigns[k] .< 0] .= 0
+            couplings[k][sign.(couplings[k]) .* initSigns[k] .< 0] .= 0.
         end
         couplings["⟂"] += delta["⟂"]
         if sign(couplings["⟂"]) * initSigns["⟂"] < 0
             proceedFlags["⟂"] = [false]
-            couplings["⟂"] = 0
+            couplings["⟂"] = 0.
         end
-        #=println("-------")=#
     end
     if saveData
         save(saveJLD, couplings)

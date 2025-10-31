@@ -76,129 +76,294 @@ end
 
 @everywhere function IterDiagMomentumSpace(
         hamiltDetails::Dict,
+        size_BZ::Int64,
         maxSize::Int64,
         momentumPoints::Vector{Int64},
         correlation::Dict;
         addPerStep::Int64=1,
     )
     allKeys = keys(correlation)
-    corrResults = Dict{String, Vector{Float64}}(k => repeat([NaN], hamiltDetails["size_BZ"]^2) for k in allKeys)
 
-    kondoGamma = zeros(2 * length(momentumPoints) + 1, 2 * length(momentumPoints) + 1)
-    kondoGamma[1, 1] = hamiltDetails["kondoPerp"]
-    hamiltonianIndices = Int64[0]
-    for (i, point) in enumerate(momentumPoints)
-        kondoGamma[1 + i, 2:2:end] .= hamiltDetails["kondoJArray"][point, momentumPoints] + hamiltDetails["kondoJArray"][ReflectY(point, hamiltDetails["size_BZ"]), momentumPoints]
-        kondoGamma[2:2:end, i + 1] .= kondoGamma[i + 1, 2:2:end]
-        kondoGamma[1 + 2 * i, 3:2:end] .= hamiltDetails["kondoJArray"][point, momentumPoints] - hamiltDetails["kondoJArray"][ReflectY(point, hamiltDetails["size_BZ"]), momentumPoints]
-        kondoGamma[3:2:end, 1 + 2 * i] .= kondoGamma[1 + 2 * i, 3:2:end]
-        append!(hamiltonianIndices, [point, -point])
-    end
-    #=priority = [sum(row.^2)^0.5 for row in eachrow(kondoGamma)]=#
-    priority = abs.(diag(kondoGamma))
-    sortedFiltered = sortperm(priority, rev=true)
-    filter!(i -> priority[i] > 0, sortedFiltered)
-    if 1 ∈ sortedFiltered
-        diff = filter(≠(1), sortedFiltered)
-        #=sortedFiltered = vcat(diff, [1])=#
-        #=sortedFiltered = vcat([1], diff)=#
-        #=sortedFiltered = vcat(diff[1:div(length(sortedFiltered)-1, 2)], [1], diff[div(length(sortedFiltered)-1, 2)+1:end])=#
-    end
-    hamiltonianIndices = hamiltonianIndices[sortedFiltered]
-    kondoGamma = kondoGamma[sortedFiltered, sortedFiltered]
+    # only momentum points with ky ≥ 0 need to be
+    # solved for, the rest can be mapped exactly
+    pointsUpperHalf = [p for p in momentumPoints 
+                       if map1DTo2D(p, size_BZ)[2] ≥ 0 
+                      ]
+
+    # define Kondo matrix just for the upper half, for both layers
+    J = zeros(2 * length(pointsUpperHalf), 2 * length(pointsUpperHalf))
     
-    hamiltonian = BilayerKondo(
-                               kondoGamma;
-                               epsilonF=hamiltDetails["epsilonF"],
-                               impU=hamiltDetails["impU"],
-                               bathChemPot=repeat([hamiltDetails["mu_c"]], length(sortedFiltered)),
-                               globalField=1e-8,
-                               couplingTolerance=1e-10,
+    # this stores the information of which indices in J
+    # store couplings from which layer. Since the first N
+    # indices are f, we set them true, the last N is set to false.
+    layerSpecs = String[]
+
+    # the first NxN points store the d-Kondo couplings,
+    # while the last NxN store the f-couplings. This means
+    # that d-correlations must be calculated from the 
+    # upper half, while f-correlations come from lower half.
+    typesOrder = ["d", "f"]
+    for (i, k) in enumerate(typesOrder)
+        indices = (i - 1) * length(pointsUpperHalf) .+ (1:length(pointsUpperHalf))
+        J[indices, indices] = hamiltDetails[k][pointsUpperHalf, pointsUpperHalf]
+        #=J[indices, indices] = ifelse(k == "d", 1, 0) .* hamiltDetails[k][pointsUpperHalf, pointsUpperHalf]=#
+        append!(layerSpecs, repeat([k], length(pointsUpperHalf)))
+    end
+
+    # we also store which index of the matrix stores
+    # momentum point
+    momenta = repeat(pointsUpperHalf, outer=2)
+
+    # sort the matrix and all other variables according
+    # to strength of Kondo coupling
+    pooledSequence = sortperm(diag(J).^2, rev=true)
+    sortseq = pooledSequence
+    #=sortseq = collect(1:2*length(pointsUpperHalf))=#
+    #=sortseq[1:2:end] = filter(i -> layerSpecs[i] == typesOrder[1], pooledSequence)=#
+    #=sortseq[2:2:end] = filter(i -> layerSpecs[i] == typesOrder[2], pooledSequence)=#
+    filter!(i -> sum(eachrow(J)[i].^2) > 0, sortseq)
+    J = J[sortseq, sortseq]
+    layerSpecs = layerSpecs[sortseq]
+    momenta = momenta[sortseq]
+
+    # obtain Hamiltonian with sorted Kondo matrix
+    hamiltonian = BilayerLEE(
+                             J,
+                             hamiltDetails["⟂"],
+                             layerSpecs;
+                             globalField=1e-8,
+                             couplingTolerance=1e-10,
                             )
-    indexPartitions = [8]
-    while indexPartitions[end] < 2 + 2 * length(sortedFiltered)
-        push!(indexPartitions, indexPartitions[end] + 2 * addPerStep)
+    # split hamiltonian into chunks for iterative diagonalisation.
+    # The first chunk has 10 qubits, then we subsequently keep
+    # adding 2 qubits (k↑, k↓) every iteration.
+    indexPartitions = [10]
+    i = 3
+    while i < length(layerSpecs)
+        push!(indexPartitions, indexPartitions[end] + 2)
+        i += 1
     end
     hamiltonianFamily = MinceHamiltonian(hamiltonian, indexPartitions)
     @assert all(!isempty, hamiltonianFamily)
-    for hamiltonian in hamiltonianFamily
-        @assert all(!isempty, hamiltonian)
+    for h_i in hamiltonianFamily
+        @assert all(!isempty, h_i)
     end
 
     corrOps = Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}()
-
     corrResults = Dict()
-    momentumPairs = vec(collect(Iterators.product(momentumPoints, momentumPoints)))
-    for (name, (type, condition, corrFunc)) in correlation
-        corrResults[name] = Dict()
+    for (name, (type, corrFunc)) in correlation
+
+        # if the type of the correlation is set
+        # to purely impurity, no momentum indices
+        # need to be passed to it.
         if type == "i"
             corrName = name
             corrOps[corrName] = corrFunc
             continue
         end
-        if type == "s"
-            if 0 ∈ hamiltonianIndices 
-                upZero = 1 + 2 * findfirst(==(0), hamiltonianIndices)
-                corrOps[name] = corrFunc(upZero, upZero)
-            else
-                corrResults[name] = 0.
-            end
-            continue
-        end
-        corrResults[name] = zeros(length(momentumPoints)^2) # Dict((k1, k2) => 0. for k1 in momentumPoints for k2 in momentumPoints)
 
-        for (ki, kj) in Iterators.product(momentumPoints, momentumPoints)
-            if !condition(ki, kj, momentumPoints)
+        # If the type is not purely impurity, we need a
+        # matrix to store the k-dependence.
+        corrResults[name] = zeros(length(momentumPoints)^2)
+
+        for (i, j) in Iterators.product(1:length(layerSpecs), 1:length(layerSpecs))
+            if j < i
                 continue
             end
-            #=corrName = name*"-"*string(findfirst(==(k_i), momentumPoints))*"-"*string(findfirst(==(k_j), momentumPoints))=#
-            index = findfirst(==((ki, kj)), momentumPairs)
-            corrName = "$(name)-$(index)"
+            # for any pair of points in the Kondo matrix,
+            # check if they come from same layer. We are
+            # not interested in inter-layer correlations.
+            if layerSpecs[i] == layerSpecs[j] == type
+                corrName = "$(name)-$(momenta[i])-$(momenta[j])"
 
-            upLeft = [1 + 2 * findfirst(==(k), hamiltonianIndices) for k in [ki, -ki] if k ∈ hamiltonianIndices]
-            upRight = [1 + 2 * findfirst(==(k), hamiltonianIndices) for k in [kj, -kj] if k ∈ hamiltonianIndices]
-            if isempty(upLeft) || isempty(upRight)
-                continue
+                # the i_th index along the Kondo matrix will be
+                # at the position 3 + 2 * i in the hilbert space
+                # sequence, because 1-4 are the impurities, so
+                # (i = 1) -> 5,6 and (i = 2) -> 7,8 and so on.
+                corrOps[corrName] = corrFunc(3 + 2 * i, 3 + 2 * j)
             end
-            corrOps[corrName] = vcat([corrFunc(iP, iM, ki, kj; factor=0.25) for (iP, iM) in Iterators.product(upLeft, upRight)]...)
         end
     end
 
     results = IterDiag(
-                      hamiltonianFamily, 
+                      hamiltonianFamily,
                       maxSize;
                       symmetries=Char['N', 'S'],
-                      magzReq=(m, N) -> -5 ≤ m ≤ 5,
-                      occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,
+                      #=magzReq=(m, N) -> -5 ≤ m ≤ 5,=#
+                      #=occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,=#
                       correlationDefDict=corrOps,
                       silent=true,
                       maxMaxSize=maxSize,
                      )
+    #=println(results)=#
     @assert results["exitCode"] == 0
-    for (name, (type, condition, _)) in correlation
-        if type ≠ "f"
-            if name ∈ keys(results)
-                corrResults[name] = results[name]
-            end
+
+    for (name, (type, _)) in correlation
+        if type == "i"
+            corrResults[name] = results[name]
             continue
         end
-        for (ki, kj) in Iterators.product(momentumPoints, momentumPoints)
-            if !condition(ki, kj, momentumPoints)
-                continue
-            end
-            #=inds = (findfirst(==(ki), momentumPoints), findfirst(==(kj), momentumPoints))=#
-            index = findfirst(==((ki, kj)), momentumPairs)
-            revIndex = findfirst(==((kj, ki)), momentumPairs)
-            corrName = "$(name)-$(index)"
-            if corrName ∈ keys(results)
+        for (index, (p1, p2)) in enumerate(Iterators.product(momentumPoints, momentumPoints))
+            if p1 ∈ pointsUpperHalf && p2 ∈ pointsUpperHalf
+                if (p1, type) ∉ collect(zip(momenta, layerSpecs)) || (p2, type) ∉ collect(zip(momenta, layerSpecs))
+                    corrResults[name][index] = 0.
+                    continue
+                end
+                corrName = "$(name)-$(p1)-$(p2)"
+                if corrName ∉ keys(results)
+                    corrName = "$(name)-$(p2)-$(p1)"
+                end
                 corrResults[name][index] = results[corrName]
+            else
+                sign = 1
+                nestedMomenta = []
+                for p in [p1, p2]
+                    if p ∈ pointsUpperHalf
+                        push!(nestedMomenta, p)
+                    else
+                        sign *= -1
+                        k = map1DTo2D(p, size_BZ)
+                        nested = ifelse(k[1] ≥ 0, k .+ [-π, π], k .+ [π, π])
+                        push!(nestedMomenta, map2DTo1D(nested..., size_BZ))
+                    end
+                end
+                if (nestedMomenta[1], type) ∉ collect(zip(momenta, layerSpecs)) || (nestedMomenta[2], type) ∉ collect(zip(momenta, layerSpecs))
+                    corrResults[name][index] = 0.
+                    continue
+                end
+                corrName = "$(name)-$(nestedMomenta[1])-$(nestedMomenta[2])"
+                if corrName ∉ keys(results)
+                    corrName = "$(name)-$(nestedMomenta[2])-$(nestedMomenta[1])"
+                end
+                corrResults[name][index] = sign * results[corrName]
             end
-            if ki == kj
-                continue
-            end
-            corrResults[name][revIndex] = corrResults[name][index]
         end
     end
+    #=E = Dict()=#
+    #=U = Dict()=#
+    #=sortFD = Dict()=#
+    #=node = map2DTo1D(π/2, π/2, size_BZ)=#
+    #=for k in ["f", "d"]=#
+    #=    hamiltDetails[k][pointsUpperHalf, pointsUpperHalf] .= 0=#
+    #=    hamiltDetails[k][node, node] = 1=#
+    #=    E[k], U[k] = eigen(Hermitian(hamiltDetails[k][pointsUpperHalf, pointsUpperHalf]))=#
+    #=    sortFD[k] = sortperm(E[k], rev=true, by=v->abs(v))=#
+    #=    U[k] = U[k][:, sortFD[k]]=#
+    #=end=#
+    #=globalU = zeros(2 * length(pointsUpperHalf), 2 * length(pointsUpperHalf))=#
+    #=globalU[1:length(E["d"]),1:length(E["d"])] = U["d"]=#
+    #=globalU[(end-length(E["f"])+1):end,(end-length(E["f"])+1):end] = U["f"]=#
+    #=K_values = Tuple{Bool,Float64}[] #collect(zip(fLayer[sortSeq], E[sortSeq]))=#
+    #=f_d_specification = []=#
+    #=for i in 1:maximum(length.((sortFD["f"], sortFD["d"])))=#
+    #=    for k in ["d", "f"]=#
+    #=        if i ∈ eachindex(sortFD[k]) && E[k][sortFD[k][i]] ≠ 0=#
+    #=            push!(K_values, (k == "f" ? true : false, E[k][sortFD[k][i]]))=#
+    #=            push!(f_d_specification, (k, i))=#
+    #=        end=#
+    #=    end=#
+    #=end=#
+    #=hamiltonian = BilayerLEE(=#
+    #=                         K_values,=#
+    #=                         hamiltDetails["⟂"];=#
+    #=                         globalField=1e-8,=#
+    #=                         couplingTolerance=1e-10,=#
+    #=                        )=#
+    #=indexPartitions = [10]=#
+    #=i = 3=#
+    #=while i < length(f_d_specification)=#
+    #=    push!(indexPartitions, indexPartitions[end] + 2)=#
+    #=    i += 1=#
+    #=end=#
+    #=hamiltonianFamily = MinceHamiltonian(hamiltonian, indexPartitions)=#
+    #=@assert all(!isempty, hamiltonianFamily)=#
+    #=for hamiltonian in hamiltonianFamily=#
+    #=    @assert all(!isempty, hamiltonian)=#
+    #=end=#
+    #==#
+    #=corrOps = Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}()=#
+    #==#
+    #=corrResults = Dict()=#
+    #=indexPairsF = Iterators.product(findall(p -> p[1] ==("f"), f_d_specification), findall(p -> p[1] ==("f"), f_d_specification))=#
+    #=indexPairsD = Iterators.product(findall(p -> p[1] ==("d"), f_d_specification), findall(p -> p[1] ==("d"), f_d_specification))=#
+    #=for (name, (type, corrFunc)) in correlation=#
+    #=    if type == "i"=#
+    #=        corrName = name=#
+    #=        corrOps[corrName] = corrFunc=#
+    #=        continue=#
+    #=    end=#
+    #=    corrResults[name] = zeros(length(momentumPoints)^2)=#
+    #==#
+    #=    for indexPairs in [indexPairsF, indexPairsD]=#
+    #=        for (i, j) in indexPairs=#
+    #=            if j < i=#
+    #=                continue=#
+    #=            end=#
+    #=            corrName = "$(name)-$(i)-$(j)"=#
+    #=            corrOps[corrName] = corrFunc(3 + 2 * i, 3 + 2 * j)=#
+    #=        end=#
+    #=    end=#
+    #=end=#
+    #==#
+    #=results = IterDiag(=#
+    #=                  hamiltonianFamily,=#
+    #=                  maxSize;=#
+    #=                  symmetries=Char['N', 'S'],=#
+    #=                  #=magzReq=(m, N) -> -5 ≤ m ≤ 5,=#=#
+    #=                  #=occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,=#=#
+    #=                  correlationDefDict=corrOps,=#
+    #=                  silent=true,=#
+    #=                  maxMaxSize=maxSize,=#
+    #=                 )=#
+    #=@assert results["exitCode"] == 0=#
+    #==#
+    #=corrMatrix = Dict(name => zeros(length([E["f"]; E["d"]]), length([E["f"]; E["d"]])) for (name, (type, _)) in correlation if type ≠ "i")=#
+    #=for (name, (type, _)) in correlation=#
+    #=    if type == "i"=#
+    #=        if name ∈ keys(results)=#
+    #=            corrResults[name] = results[name]=#
+    #=        end=#
+    #=        continue=#
+    #=    end=#
+    #=    for (k, indexPairs) in zip(["f", "d"], [indexPairsF, indexPairsD])=#
+    #=        for (i, j) in indexPairs=#
+    #=            if j < i=#
+    #=                continue=#
+    #=            end=#
+    #=            corrName = "$(name)-$(i)-$(j)"=#
+    #=            pos_i = ifelse(k == "d", 0, length(E["d"])) + f_d_specification[i][2]=#
+    #=            pos_j = ifelse(k == "d", 0, length(E["d"])) + f_d_specification[j][2]=#
+    #=            corrMatrix[name][pos_i, pos_j] = results[corrName]=#
+    #=            corrMatrix[name][pos_j, pos_i] = corrMatrix[name][pos_i, pos_j]=#
+    #=        end=#
+    #=    end=#
+    #=    rotatedMatrix = globalU * corrMatrix[name] * globalU'=#
+    #=    corrMatrixRotated = Dict("d" => rotatedMatrix[1:length(pointsUpperHalf), 1:length(pointsUpperHalf)],=#
+    #=                             "f" => rotatedMatrix[(end-length(pointsUpperHalf)+1):end, (end-length(pointsUpperHalf)+1):end]=#
+    #=                            )=#
+    #=    for (index, (p1, p2)) in enumerate(Iterators.product(momentumPoints, momentumPoints))=#
+    #=        if p1 ∈ pointsUpperHalf && p2 ∈ pointsUpperHalf=#
+    #=            i1 = findfirst(==(p1), pointsUpperHalf)=#
+    #=            i2 = findfirst(==(p2), pointsUpperHalf)=#
+    #=            corrResults[name][index] = corrMatrixRotated[type][i1, i2]=#
+    #=        else=#
+    #=            sign = 1=#
+    #=            i = []=#
+    #=            for p in [p1, p2]=#
+    #=                if p ∈ pointsUpperHalf=#
+    #=                    push!(i, findfirst(==(p), pointsUpperHalf))=#
+    #=                else=#
+    #=                    sign *= -1=#
+    #=                    k = map1DTo2D(p, size_BZ)=#
+    #=                    nested = ifelse(k[1] ≥ 0, k .+ [-π, π], k .+ [π, π])=#
+    #=                    push!(i, findfirst(==(map2DTo1D(nested..., size_BZ)), pointsUpperHalf))=#
+    #=                end=#
+    #=            end=#
+    #=            corrResults[name][index] = sign * corrMatrixRotated[type][i...]=#
+    #=            corrResults[name][index] = sign * corrMatrixRotated[type][i...]=#
+    #=        end=#
+    #=    end=#
+    #=end=#
 
     return corrResults
 end
@@ -390,76 +555,67 @@ end
 
 @everywhere function AuxiliaryCorrelations(
         size_BZ::Int64,
-        couplings::Dict{String, Float64},
+        bareCouplings::Dict{String, Float64},
         correlation::Dict,
         momentumPoints::Vector{Int64},
         maxSize::Int64;
         loadData::Bool=false,
+        saveData::Bool=true,
     )
-
-    function Average(results)
-        averageResults = Dict{String, Float64}()
-        for (name, (type, _, _)) in correlation
-            if type == "f"
-                averageResults[name] = sum(results[name])
-            else
-                averageResults[name] = results[name]
-            end
-        end
-        return averageResults
-    end
 
     _, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
 
-    savePath = joinpath(SAVEDIR, SavePath("mom-corr-", size_BZ, couplings, ".json"; maxSize=maxSize))
+    saveJLD = joinpath(SAVEDIR, SavePath("CORR2P-", size_BZ, bareCouplings, "jld2"; maxSize=maxSize))
+
     availableResults = Dict()
-    if isfile(savePath) && loadData
-        loadedResults = JSON3.read(read(savePath, String), Dict{String, Any})
+    if isfile(saveJLD) && loadData
+        loadedResults = load(saveJLD)
         if keys(correlation) ⊆ keys(loadedResults)
             return loadedResults
         else
             merge!(availableResults, loadedResults)
+            for k in keys(loadedResults)
+                if k ∈ keys(correlation)
+                    delete!(correlation, k)
+                end
+            end
         end
     end
 
-    kondoJArray, kondoPerpArray, dispersion = momentumSpaceRG(size_BZ, couplings; loadData=false, saveData=false)
+    couplings = momentumSpaceRG(size_BZ, bareCouplings; loadData=false, saveData=false)
+    #=if bareCouplings["Wf"] == 0 && bareCouplings["J⟂"] == 0=#
+    #=    FSpoints = getIsoEngCont(dispersion, 0.0)=#
+    #=    println(sort(vec(round.(couplings["d"][FSpoints, FSpoints], digits=4))) .- sort(vec(round.(couplings["f"][FSpoints, FSpoints], digits=4))))=#
+    #=end=#
 
-    averageKondoScale = sum(abs.(kondoJArray[:, :, 1])) / length(kondoJArray[:, :, 1])
-    @assert averageKondoScale > RG_RELEVANCE_TOL
-    kondoJArray[:, :, end] .= ifelse.(abs.(kondoJArray[:, :, end]) ./ averageKondoScale .> RG_RELEVANCE_TOL, kondoJArray[:, :, end], 0)
+    for k in ["f", "d"]
+        averageKondoScale = bareCouplings["J$k"] / 2
+        @assert averageKondoScale > RG_RELEVANCE_TOL
+        couplings[k] .= ifelse.(abs.(couplings[k]) ./ averageKondoScale .> RG_RELEVANCE_TOL, couplings[k], 0)
+    end
 
-    hamiltDetails = Dict()
-    hamiltDetails["kondoJArray"] = kondoJArray[:, :, end]
-    merge!(hamiltDetails, couplings)
-    hamiltDetails["kondoPerp"] = kondoPerpArray[end]
-    hamiltDetails["dispersion"] = dispersion
-    hamiltDetails["size_BZ"] = size_BZ
-
-    if abs(hamiltDetails["mu_c"]) < 4 * hamiltDetails["lightBandFactor"] * HOP_T
-        hamiltDetails["mu_c"] = 0.
-    elseif hamiltDetails["mu_c"] > 4 * hamiltDetails["lightBandFactor"] * HOP_T
-        hamiltDetails["mu_c"] -= 4 * hamiltDetails["lightBandFactor"] * HOP_T
+    if abs(bareCouplings["μ"]) < 4 * HOP_T
+        couplings["μ"] = 0.
+    elseif bareCouplings["μ"] > 4 * HOP_T
+        couplings["μ"] -= 4 * HOP_T
     else
-        hamiltDetails["mu_c"] += 4 * hamiltDetails["lightBandFactor"] * HOP_T
+        couplings["μ"] += 4 * HOP_T
     end
 
     results = IterDiagMomentumSpace(
-                                    hamiltDetails, 
+                                    couplings, 
+                                    size_BZ,
                                     maxSize, 
                                     momentumPoints,
                                     correlation;
                                     addPerStep=1,
                                    )
-
     merge!(availableResults, results)
-    if !isnothing(savePath)
-        mkpath(SAVEDIR)
-        open(savePath, "w") do file JSON3.write(file, availableResults) end
+    if saveData
+        save(saveJLD, availableResults)
     end
 
-    return results
-    #=return Average(results)=#
-
+    return availableResults
 end
 
 

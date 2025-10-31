@@ -25,10 +25,17 @@ end
 @everywhere include(submitDir * "Constants.jl")
 @everywhere include(submitDir * "Helpers.jl")
 @everywhere include(submitDir * "RgFlow.jl")
-#=@everywhere include(submitDir * "Models.jl")=#
+@everywhere include(submitDir * "Models.jl")
 #=@everywhere include(submitDir * "PhaseDiagram.jl")=#
-#=@everywhere include(submitDir * "Probes.jl")=#
+@everywhere include(submitDir * "Probes.jl")
 @everywhere include(submitDir * "PltStyle.jl")
+
+@everywhere function insertWfJ(couplings, Wf, J, μ)
+    couplings["Wf"] = Wf
+    couplings["J⟂"] = J
+    couplings["μ"] = μ
+    return couplings
+end
 
 function RGFlow(
         couplings,
@@ -38,16 +45,9 @@ function RGFlow(
         size_BZ::Int64;
         loadData::Bool=false,
     )
-    function insertWfJ(couplings, Wf, J, μ)
-        couplings["Wf"] = Wf
-        couplings["J⟂"] = J
-        couplings["μ"] = μ
-        return couplings
-    end
     sparseWf = length(Wf) ≥ 20 ? Wf[1:div(length(Wf), 10):end] : Wf
     sparseJ = length(J) ≥ 20 ? J[1:div(length(J), 10):end] : J
     parameters = Iterators.product(Wf, J)
-    sparseParameters = Iterators.product(sparseWf, sparseJ)
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
     FSpoints = getIsoEngCont(dispersion, 0.0)
     fig, axes = subplots(ncols=3, nrows=length(μ), figsize=(20, 3.5 * length(μ)))
@@ -56,7 +56,7 @@ function RGFlow(
     for (j, μ_i) in enumerate(μ)
         results = @showprogress desc="rg flow" pmap(p -> momentumSpaceRG(size_BZ, insertWfJ(couplings, p[1], p[2], μ_i); loadData=loadData), parameters)
         for (i, key) in enumerate(["f", "d", "⟂"])
-            ax = axes[j, i]
+            ax = length(μ) > 1 ? axes[j, i] : axes[i]
             if key == "f" || key == "d"
                 keyData = [maximum(diag(abs.(r[key])[FSpoints, FSpoints])) for r in results]
                 boolData = [count(>(1e-3), abs.(diag(r[key][FSpoints, FSpoints]))) / length(FSpoints) for r in results]
@@ -177,129 +177,66 @@ function PhaseDiagram(
 end
 
 function AuxiliaryCorrelations(
-        size_BZ::Int64,
-        maxSize::Int64,
-        couplingsRange::Dict{String, Vector{Float64}}, 
-        axLab::Vector{String},
-        cbarLabels::Dict{},
-        saveNamePrefix::String;
+        couplings,
+        Wf,
+        J,
+        size_BZ,
+        maxSize,
+        cbarLabels::Dict;
         loadData::Bool=false,
     )
-    nonAxLabs = sort([k for k in keys(couplingsRange) if k ∉ axLab])
-    suptitle = latexstring(join(["$(AXES_LABELS[lab])=$(couplingsRange[lab][1])" for lab in nonAxLabs], ", "))
-    basicCouplings = Dict{String, Float64}(k => v[1] for (k, v) in couplingsRange if length(v) == 1)
-    basicCouplings["omega_by_t"] = OMEGA_BY_t
-    basicCouplings["impU"] = impU
-    rangedCouplings = Dict{String, Vector{Float64}}(k => FillIn(v) for (k, v) in couplingsRange if length(v) == 3)
-    parameterSpace = Iterators.product([rangedCouplings[ax] for ax in axLab]...)
+    parameterSpace = Iterators.product(Wf, J)
 
     node = map2DTo1D(π/2, π/2, size_BZ)
     antinode = map2DTo1D(3π/4, π/4, size_BZ)
-    #=microCorrelation = Dict(=#
-    #=                    "SF-d0-f" => ("f", (k1, k2, points) -> k1 ≥ k2, (i, j, k1, k2; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor * NNFunc(k1, k2, size_BZ) / 4), ("+-+-", [2, 1, i, j+1], 3 * factor * NNFunc(k1, k2, size_BZ) / 4)]),=#
-    #=                    "SF-d0-N" => ("f", (k1, k2, points) -> k1 == node && k2 == node, (i, j, k1, k2; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),=#
-    #=                    "SF-d0-AN" => ("f", (k1, k2, points) -> k1 == antinode && k2 == antinode, (i, j, k1, k2; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),=#
-    #=                    "SF-d0-s" => ("s", nothing, (i, j; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),=#
-    #=                    "Sdz" => ("i", nothing, [("n", [1], 0.5), ("n", [2], -0.5)]),=#
-    #=                   )=#
     microCorrelation = Dict(
-                        "SF-dk1k1-f" => ("f", (k1, k2, points) -> k1 ≥ k2, (i, j, k1, k2; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),
-                        "SF-d0-s" => ("s", nothing, (i, j; factor = 1) -> [("+-+-", [1, 2, i+1, j], 3 * factor / 4), ("+-+-", [2, 1, i, j+1], 3 * factor / 4)]),
-                        "Sdz" => ("i", nothing, [("n", [1], 0.5), ("n", [2], 0.5)]),
+                            "SF-fkk" => ("f", (i, j; factor = 1) -> [("+-+-", [1, 2, i+1, j], factor / 2), ("+-+-", [2, 1, i, j+1], factor / 2), ("n+-", [1, i, j], factor / 4), ("n+-", [1, i+1, j+1], -factor / 4), ("n+-", [2, i, j], -factor / 4), ("n+-", [2, i+1, j+1], factor / 4)]),
+                            "SF-dkk" => ("d", (i, j; factor = 1) -> [("+-+-", [3, 4, i+1, j], factor / 2), ("+-+-", [4, 3, i, j+1], factor / 2), ("n+-", [3, i, j], factor / 4), ("n+-", [3, i+1, j+1], -factor / 4), ("n+-", [4, i, j], -factor / 4), ("n+-", [4, i+1, j+1], factor / 4)]),
+                            "SF-fdpm" => ("i", [("+-+-", [1, 2, 4, 3], 1 / 2), ("+-+-", [2, 1, 3, 4], 1 / 2)]),
+                            "SF-fdzz" => ("i", [("nn", [1, 3], 1 / 4), ("nn", [1, 4], -1 / 4), ("nn", [2, 3], -1 / 4), ("nn", [2, 4], 1 / 4)]),
                        )
             
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
-    northEastFermiPoints = filter(p -> all(map1DTo2D(p, size_BZ) .≥ 0), getIsoEngCont(dispersion, 0.0))
-    @assert issorted(northEastFermiPoints)
-    combinedResults = @showprogress pmap(couplings -> AuxiliaryCorrelations(size_BZ,
-                                                      merge(basicCouplings, Dict(axLab .=> couplings)),
+    fermiShell = argmin(abs.([dispersion[i] - couplings["μ"] for i in 1:div(size_BZ+1, 2)]))
+    momentumPoints = getIsoEngCont(dispersion, dispersion[fermiShell])
+    @assert issorted(momentumPoints)
+    combinedResults = @showprogress pmap(WfJ -> AuxiliaryCorrelations(size_BZ,
+                                                      insertWfJ(couplings, WfJ..., couplings["μ"]),
                                                       microCorrelation,
-                                                      northEastFermiPoints,
+                                                      momentumPoints,
                                                       maxSize;
                                                       loadData=loadData,
                                                     ),
                                          parameterSpace
                                         )
 
-    momentumPairs = vec(collect(Iterators.product(northEastFermiPoints, northEastFermiPoints)))
+    momentumPairs = vec(collect(Iterators.product(momentumPoints, momentumPoints)))
     correlations = Dict(
-                        "SF-d0-f" => cR -> abs(sum([cR["SF-dk1k1-f"][index] * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs)])),
-                        "SF-d0-s" => cR -> abs(cR["SF-d0-s"]),
-                        "SF-dNN" => cR -> abs(sum([cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if node in (k1, k2)])),
-                        "SF-dAA" => cR -> abs(sum([cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if antinode in (k1, k2)])),
-                        "Sdz" => cR -> abs(cR["Sdz"]),
-                        "PF" => cR -> 0. + count(v -> abs(v) > 1e-5, [cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])
+                        "SF-fmax" => cR -> maximum(abs.(cR["SF-fkk"])),
+                        "SF-dmax" => cR -> maximum(abs.(cR["SF-dkk"])),
+                        "SF-f0" => cR -> sum([abs(cR["SF-fkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs)]) / length(momentumPoints),
+                        "SF-d0" => cR -> sum([abs(cR["SF-dkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs)]) / length(momentumPoints),
+                        "SF-fdpm" => cR -> abs(cR["SF-fdpm"]),
+                        "SF-fdzz" => cR -> abs(cR["SF-fdzz"]),
+                        "SF-fPF" => cR -> count(>(0), abs.([cR["SF-fkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])) / length(momentumPoints),
+                        "SF-dPF" => cR -> count(>(0), abs.([cR["SF-dkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])) / length(momentumPoints),
+                        #="SF-dNN" => cR -> abs(sum([cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if node in (k1, k2)])),=#
+                        #="SF-dAA" => cR -> abs(sum([cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if antinode in (k1, k2)])),=#
+                        #="Sdz" => cR -> abs(cR["Sdz"]),=#
+                        #="PF" => cR -> 0. + count(v -> abs(v) > 1e-5, [cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])=#
                        )
     figPaths = []
-    plottableResults = Dict(name => Dict() for name in keys(correlations))
+    plottableResults = Dict{String, Vector{Float64}}()
     for (name, func) in correlations
-        for (cR, key) in zip(combinedResults, parameterSpace)
-            plottableResults[name][key] = func(cR)
-        end
+        plottableResults[name] = [func(cR) for cR in vec(collect(combinedResults))]
     end
-    saveName = "$(saveNamePrefix)-$(size_BZ)-$(maxSize)" * ExtendedSaveName(couplingsRange)
-    #=heatmapF = Dict()=#
-    #=heatmapS = Dict()=#
-    #=heatmapN = Dict()=#
-    #=heatmapA = Dict()=#
-    #=heatmapSdz = Dict()=#
-    #=heatmapPF = Dict()=#
-    #=for (index, key) in enumerate(parameterSpace)=#
-    #=    heatmapF[key] = abs(combinedResults[index]["SF-d0-f"])=#
-    #=    heatmapS[key] = abs(combinedResults[index]["SF-d0-s"])=#
-    #=    heatmapSdz[key] = abs(combinedResults[index]["Sdz"])=#
-    #=    heatmapPF[key] = abs(combinedResults[index]["PF"])=#
-    #=    heatmapN[key] = abs(combinedResults[index]["SF-dNN"])=#
-    #=    heatmapA[key] = abs(combinedResults[index]["SF-dAA"])=#
-    #=end=#
-    HM4D(plottableResults["SF-d0-f"], plottableResults["SF-d0-s"], rangedCouplings, axLab, "loc-$(saveName)", [cbarLabels["SF-d0-f"], cbarLabels["SF-d0-s"]], suptitle)
-    HM4D(plottableResults["SF-dNN"], plottableResults["SF-dAA"], rangedCouplings, axLab, "k-$(saveName)", [cbarLabels["SF-dNN"], cbarLabels["SF-dAA"]], suptitle)
-    HM4D(plottableResults["Sdz"], plottableResults["PF"], rangedCouplings, axLab, "Sdz-$(saveName)", [cbarLabels["Sdz"], cbarLabels["PF"]], suptitle)
-    Lines(Dict("PF" => plottableResults["PF"]), rangedCouplings, axLab, saveName, cbarLabels, suptitle)
+    #=saveName = "$(saveNamePrefix)-$(size_BZ)-$(maxSize)" * ExtendedSaveName(couplingsRange)=#
+    RowPlots(plottableResults, collect(parameterSpace), [("SF-f0", "SF-d0"), ("SF-fdpm", "SF-fdzz"), ("SF-fPF", "SF-dPF")], [(L"$\langle {S_f\cdot S_{f0}}\rangle$",L"$\langle {S_d\cdot S_{d0}}\rangle$"), (L"$\langle {S_f^+S_d^- + \text{h.c.}}\rangle$", L"$\langle {S_f^zS_d^z}\rangle$"), ("f-PF", "d-PF")], ["in-plane correlation", "out-of-plane correlation", "Pole Fraction"], ("J", "Wf"), "locCorr.pdf")
     return figPaths
 end
 
-RGFlow(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.2, "Jd" => 0.2, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), 0:-0.01:-0.2, 0:0.02:0.4, 0:1.5:3, 49; loadData=true)
-
-#=namesCorr = String[]=#
-#=namesPD = String[]=#
-#=for (kondoF, U) in Iterators.product([0.5], [5.,])=#
-#=    global impU = U=#
-#=    couplings = Dict(=#
-#=                     "mu_c" => [0.3, 0.2, 0.3],=#
-#=                     "W" => [-1.5, 0.2, 0.5],=#
-#=                     "kondoF" => [kondoF],=#
-#=                     "Wf" => [-0.4, 0.01, -0.2],=#
-#=                     "epsilonF" => [-0.5 * impU],=#
-#=                     "lightBandFactor" => [1.5],=#
-#=                     "kondoPerp" => [0.1, 0.05, 0.1],=#
-#=                    )=#
-#=    axLab = ["kondoPerp", "mu_c", "Wf", "W"]=#
-#=    @time append!(namesCorr,=#
-#=                AuxiliaryCorrelations(=#
-#=                    25,=#
-#=                    1501,=#
-#=                    couplings,=#
-#=                    axLab,=#
-#=                    Dict("SF-d0-f"=>L"\langle S_f \cdot S_{f}^\prime \rangle_\text{NN}", "SF-d0-s" => L"\langle S_f \cdot S_c \rangle", "Sdz" => L"S^z_\text{imp}", "SF-dNN"=>L"\langle S_f \cdot S_{N}\rangle", "SF-dAA" => L"\langle S_f \cdot S_{AN} \rangle", "PF" => "PF"),=#
-#=                    "sc-mz-";=#
-#=                    loadData=true,=#
-#=                   )=#
-#=               )=#
-#==#
-#=    #=@time push!(namesPD, PhaseDiagram(=#=#
-#=    #=                25,=#=#
-#=    #=                couplings,=#=#
-#=    #=                axLab,=#=#
-#=    #=                Dict(["PF", L"J^*"]);=#=#
-#=    #=                loadData=false,=#=#
-#=    #=               ))=#=#
-#==#
-#=    #=@time ScattProb(25,=#=#
-#=    #=                couplings,=#=#
-#=    #=                axLab;=#=#
-#=    #=                loadData=true,=#=#
-#=    #=               )=#=#
-#=end=#
-#=if !isempty(namesPD); merge_pdfs(namesPD, "PD.pdf", cleanup=true); end=#
-#=if !isempty(namesCorr); merge_pdfs(namesCorr, "Corr.pdf", cleanup=true); end=#
+size_BZ = 9
+J = 0.0:0.01:0.2
+Wf = 0.0:-0.05:-1.2
+RGFlow(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, 0:1.5:0, size_BZ; loadData=true)
+AuxiliaryCorrelations(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, size_BZ, 1000, Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0"); loadData=true)

@@ -182,14 +182,43 @@ In order to calculate equal-time correlations (such as \(\braket{S_d^+ f^\dagger
 \end{aligned}\end{equation}
 where the four relations act on operators in four quadrants. These relations allow us to express correlations \(F_{k_i, k_j} = \braket{S_d^+ c^\dagger_{k_i, \uparrow}c_{k_j, \downarrow}}\) for the bare fields \(f\) in terms of the rotated fields. Using the fact that the Hamiltonian does not couple the fields \(B_{+}\) and \(A_{+}\), we have
 \begin{equation}\begin{aligned}
-	F_{k_1, k_1} = F_{k_3, k_3} = -F_{k_1, k_3} = \frac{1}{4}\braket{S_d^+ A^\dagger_{k_1,\downarrow,-}A_{k_1,\uparrow,-})}~,\\
-	F_{k_2, k_2} = F_{k_4, k_4} = -F_{k_2, k_4} = \frac{1}{4}\braket{S_d^+ A^\dagger_{k_2,\downarrow,-}A_{k_2,\uparrow,-})}~,\\
-	F_{k_1, k_2} = F_{k_3, k_4} = -F_{k_1, k_4} = -F_{k_2, k_3} = \frac{1}{4}\braket{S_d^+ A^\dagger_{k_1,\downarrow,-}A_{k_1,\uparrow,-})}~,
+	F_{k_1, k_1} = F_{k_3, k_3} = -F_{k_1, k_3} = \frac{1}{2}\braket{S_d^+ A^\dagger_{k_1,\downarrow,-}A_{k_1,\uparrow,-})}~,\\
+	F_{k_2, k_2} = F_{k_4, k_4} = -F_{k_2, k_4} = \frac{1}{2}\braket{S_d^+ A^\dagger_{k_2,\downarrow,-}A_{k_2,\uparrow,-})}~,\\
+	F_{k_1, k_2} = F_{k_3, k_4} = -F_{k_1, k_4} = -F_{k_2, k_3} = \frac{1}{2}\braket{S_d^+ A^\dagger_{k_1,\downarrow,-}A_{k_1,\uparrow,-})}~,
 \end{aligned}\end{equation}
 where the momentum state \(k_i\) belongs to the quadrant \(Q_i\).
 
 \section{Effective Star Graph Representation of Kondo Interaction}
-To make computation less intensive, we want to make the Hamiltonian in eq.~\ref{kondoAB} sparser, by going to a star graph representation where each node of the graph couples only with the impurity spin (central node) and not to the other nodes of the graph. Let these modified fermions \(\gamma\) be \(\)
+To make computation less intensive, we want to make the Hamiltonian in eq.~\ref{kondoAB} sparser, by going to a star graph representation where each node of the graph couples only with the impurity spin (central node) and not to the other nodes of the graph. We therefore consider a rotated basis of excitations
+\begin{equation}\begin{aligned}\label{gammaDef}
+	\gamma_{i,\sigma}^\dagger = \sum_{k}\Lambda_{i, k} A^\dagger_{k,\sigma}~,\text{ where }~\sum_{k}\Lambda^*_{i, k}\Lambda_{j, k} = \delta_{i,j}~.
+\end{aligned}\end{equation}
+These fermions of course satisfy the appropriate algebra:
+\begin{equation}\begin{aligned}
+	\left\{\gamma_{i,\sigma}, \gamma^\dagger_{j,\sigma^\prime}\right\} = \sum_{k, q}\Lambda^*_{i, k}\Lambda_{j, q} \left\{A_{k,\sigma}, A_{q,\sigma^\prime}^\dagger\right\} = \delta_{i, j}\delta_{\sigma,\sigma^\prime}~.
+\end{aligned}\end{equation}
+In order to calculate the coefficients \(\Lambda_{i, k}\), we impose the star graph simplification condition described above:
+\begin{equation}\begin{aligned}
+	\sum_{{\bf k}, {\bf q}} J_f^*({\bf k},{\bf q}) A^\dagger_{{\bf k},\alpha}A_{{\bf q},\beta} = \sum_i K_i \gamma^\dagger_{i,\alpha}\gamma_{i,\beta}~,
+\end{aligned}\end{equation}
+where \(K_i\) are the eigenvalues of the Kondo coupling matrix \(J_f^*({\bf k},{\bf q})\). Substituting the definition of the \(\gamma\) fields (eq.~\ref{gammaDef}) leads to the equation
+\begin{equation}\begin{aligned}\label{lambdaEigen}
+	J_f^*({\bf k},{\bf q}) = \sum_i \Lambda_{k, i} K_i \Lambda^\dagger_{i,q} \implies \mathcal{J} = \Lambda K \Lambda^\dagger~,
+\end{aligned}\end{equation}
+where \(\mathcal{J}\) is the Kondo coupling matrix with matrix elements \(J_f^*({\bf k},{\bf q})\), \(K\) is a diagonal matrix with the eigenvalues (\(K_i\)) of \(\mathcal{J}\) along its diagonal, and \(\Lambda\) is the matrix \(\Lambda_{i, k}\) (the rotated indices \(i\) along the row, and the earlier momentum indices along the column). From eq.~\ref{lambdaEigen}, it is clear that since \(\mathcal{J}\) is Hermitian, the matrix \(\Lambda\) is simply the unitary matrix which diagonalises the Kondo matrix \(\mathcal{J}\):
+\begin{equation}\begin{aligned}
+\Lambda^\dagger \mathcal{J} \Lambda = K~.
+\end{aligned}\end{equation}
+
+
+The prescription is therefore as follows. We compute the unitary transformation \(\Lambda\) that diagonalises \(\mathcal{J}\) and obtain the eigenvalues \(\left\{K_i\right\}\). Using the eigenvalues, we work with the sparser Hamiltonian
+\begin{equation}\begin{aligned}
+	\vec{S}_f \cdot \sum_{\alpha,\beta}\vec{\sigma}_{\alpha,\beta}\sum_i K_i \gamma^\dagger_{i,\alpha}\gamma_{i,\beta}~.
+\end{aligned}\end{equation}
+If we have to calculate a certain correlation \(C_{k,q}\), we instead calculate the correlation matrix \(\tilde C_{i,j}\), and then transform back using the unitary transformation:
+\begin{equation}\begin{aligned}
+	C = \Lambda \tilde C \Lambda^\dagger~.
+\end{aligned}\end{equation}
 
 
 

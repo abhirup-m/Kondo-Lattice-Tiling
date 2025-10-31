@@ -252,3 +252,163 @@ function BilayerKondo(
     return hamiltonian
 end
 export BilayerKondo
+
+
+function BilayerLEE(
+        K_values::Vector{Tuple{Bool, Float64}},
+        Jp::Float64;
+        globalField::Number=0,
+        couplingTolerance::Number=1e-15,
+    )
+
+    #### Indexing convention ####
+    # Sf   Sd   γ1   γ2  ...
+    # 1,2, 3,4, 5,6, 7,8 ...
+    hamiltonian = Tuple{String, Vector{Int64}, Float64}[]
+    push!(hamiltonian,
+          ("nn",  [1, 3], Jp / 4)
+         ) # n_{d up, n_{0 up}
+    push!(hamiltonian,
+          ("nn",  [1, 4], -Jp / 4)
+         ) # n_{d up, n_{0 down}
+    push!(hamiltonian,
+          ("nn",  [2, 3], -Jp / 4)
+         ) # n_{d down, n_{0 up}
+    push!(hamiltonian,
+          ("nn",  [2, 4], Jp / 4)
+         ) # n_{d down, n_{0 down}
+    push!(hamiltonian,
+          ("+-+-",  [1, 2, 4, 3], Jp / 2)
+         ) # S_d^+ S_0^-
+    push!(hamiltonian,
+          ("+-+-",  [2, 1, 3, 4], Jp / 2)
+         ) # S_d^- S_0^+
+
+    # kondo terms
+    for (i, (fLayer, K_i)) in enumerate(K_values)
+        if abs(K_i) < couplingTolerance
+            continue
+        end
+        if fLayer
+            imp = 1
+        else
+            imp = 3
+        end
+        bath = 3 + 2 * i
+        push!(hamiltonian,
+              ("n+-",  [imp, bath, bath], K_i / 4)
+             ) # n_{d up, n_{0 up}
+        push!(hamiltonian,
+              ("n+-",  [imp, bath + 1, bath + 1], -K_i / 4)
+             ) # n_{d up, n_{0 down}
+        push!(hamiltonian,
+              ("n+-",  [imp + 1, bath, bath], -K_i / 4)
+             ) # n_{d down, n_{0 up}
+        push!(hamiltonian,
+              ("n+-",  [imp + 1, bath + 1, bath + 1], K_i / 4)
+             ) # n_{d down, n_{0 down}
+        push!(hamiltonian,
+              ("+-+-",  [imp, imp + 1, bath + 1, bath], K_i / 2)
+             ) # S_d^+ S_0^-
+        push!(hamiltonian,
+              ("+-+-",  [imp + 1, imp, bath, bath + 1], K_i / 2)
+             ) # S_d^- S_0^+
+    end
+
+    # global magnetic field (to lift any trivial degeneracy)
+    if abs(globalField) > couplingTolerance
+        for site in 1:2*(2 + length(K_values))
+            if site % 2 == 1
+                push!(hamiltonian, ("n",  [site], globalField/2))
+            else
+                push!(hamiltonian, ("n",  [site], -globalField/2))
+            end
+        end
+    end
+
+    @assert !isempty(hamiltonian) "Hamiltonian is empty!"
+
+    return hamiltonian
+end
+
+function BilayerLEE(
+        J::Matrix{Float64},
+        Jp::Float64,
+        layerSpecs::Vector{String};
+        globalField::Number=0,
+        couplingTolerance::Number=1e-15,
+    )
+
+    #### Indexing convention ####
+    # Sf   Sd   γ1   γ2  ...
+    # 1,2, 3,4, 5,6, 7,8 ...
+    hamiltonian = Tuple{String, Vector{Int64}, Float64}[]
+    push!(hamiltonian,
+          ("nn",  [1, 3], Jp / 4)
+         ) # n_{d up, n_{0 up}
+    push!(hamiltonian,
+          ("nn",  [1, 4], -Jp / 4)
+         ) # n_{d up, n_{0 down}
+    push!(hamiltonian,
+          ("nn",  [2, 3], -Jp / 4)
+         ) # n_{d down, n_{0 up}
+    push!(hamiltonian,
+          ("nn",  [2, 4], Jp / 4)
+         ) # n_{d down, n_{0 down}
+    push!(hamiltonian,
+          ("+-+-",  [1, 2, 4, 3], Jp / 2)
+         ) # S_d^+ S_0^-
+    push!(hamiltonian,
+          ("+-+-",  [2, 1, 3, 4], Jp / 2)
+         ) # S_d^- S_0^+
+
+    # kondo terms
+    for i in 1:size(J)[1]
+        for j in 1:size(J)[2]
+            J_ij = J[i, j]
+            if abs(J_ij) < couplingTolerance
+                continue
+            end
+            if layerSpecs[i] == "f"
+                imp = 1
+            else
+                imp = 3
+            end
+            bath_i = 3 + 2 * i
+            bath_j = 3 + 2 * j
+            push!(hamiltonian,
+                  ("n+-",  [imp, bath_i, bath_j], J_ij / 4)
+                 ) # n_{d up, n_{0 up}
+            push!(hamiltonian,
+                  ("n+-",  [imp, bath_i + 1, bath_j + 1], -J_ij / 4)
+                 ) # n_{d up, n_{0 down}
+            push!(hamiltonian,
+                  ("n+-",  [imp + 1, bath_i, bath_j], -J_ij / 4)
+                 ) # n_{d down, n_{0 up}
+            push!(hamiltonian,
+                  ("n+-",  [imp + 1, bath_i + 1, bath_j + 1], J_ij / 4)
+                 ) # n_{d down, n_{0 down}
+            push!(hamiltonian,
+                  ("+-+-",  [imp, imp + 1, bath_i + 1, bath_j], J_ij / 2)
+                 ) # S_d^+ S_0^-
+            push!(hamiltonian,
+                  ("+-+-",  [imp + 1, imp, bath_i, bath_j + 1], J_ij / 2)
+                 ) # S_d^- S_0^+
+        end
+    end
+
+    # global magnetic field (to lift any trivial degeneracy)
+    if abs(globalField) > couplingTolerance
+        for site in 1:2*(2 + size(J)[1])
+            if site % 2 == 1
+                push!(hamiltonian, ("n",  [site], globalField/2))
+            else
+                push!(hamiltonian, ("n",  [site], -globalField/2))
+            end
+        end
+    end
+
+    @assert !isempty(hamiltonian) "Hamiltonian is empty!"
+
+    return hamiltonian
+end
