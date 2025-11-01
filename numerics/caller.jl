@@ -10,7 +10,7 @@
 
 ENV["PYCALL_GC_FINALIZE"] = "0"
 using Distributed
-@everywhere using PDFmerger, ProgressMeter, PyPlot, LaTeXStrings
+@everywhere using ProgressMeter, PyPlot, LaTeXStrings
 if "SLURM_SUBMIT_DIR" in keys(ENV)
     addprocs(SlurmManager())
 end
@@ -236,7 +236,7 @@ function AuxiliaryCorrelations(
 end
 
 size_BZ = 9
-J = 0.0:0.01:0.2
-Wf = 0.0:-0.05:-1.2
-RGFlow(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, 0:1.5:0, size_BZ; loadData=true)
-AuxiliaryCorrelations(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, size_BZ, 1000, Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0"); loadData=true)
+J = 0.0:0.01:0.02
+Wf = 0.0:-0.01:-0.02
+#=RGFlow(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, 0:1.5:0, size_BZ; loadData=true)=#
+AuxiliaryCorrelations(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, size_BZ, 800, Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0"); loadData=false)

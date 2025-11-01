@@ -81,6 +81,7 @@ end
         momentumPoints::Vector{Int64},
         correlation::Dict;
         addPerStep::Int64=1,
+        tolerance=1e-10,
     )
     allKeys = keys(correlation)
 
@@ -106,29 +107,33 @@ end
     for (i, k) in enumerate(typesOrder)
         indices = (i - 1) * length(pointsUpperHalf) .+ (1:length(pointsUpperHalf))
         J[indices, indices] = hamiltDetails[k][pointsUpperHalf, pointsUpperHalf]
-        #=J[indices, indices] = ifelse(k == "d", 1, 0) .* hamiltDetails[k][pointsUpperHalf, pointsUpperHalf]=#
         append!(layerSpecs, repeat([k], length(pointsUpperHalf)))
     end
 
-    # we also store which index of the matrix stores
-    # momentum point
-    momenta = repeat(pointsUpperHalf, outer=2)
+    # we also store which index of the
+    # matrix stores which momentum point
+    #=momenta = repeat(pointsUpperHalf, outer=2)=#
 
     # sort the matrix and all other variables according
     # to strength of Kondo coupling
-    pooledSequence = sortperm(diag(J).^2, rev=true)
-    sortseq = pooledSequence
-    #=sortseq = collect(1:2*length(pointsUpperHalf))=#
-    #=sortseq[1:2:end] = filter(i -> layerSpecs[i] == typesOrder[1], pooledSequence)=#
-    #=sortseq[2:2:end] = filter(i -> layerSpecs[i] == typesOrder[2], pooledSequence)=#
-    filter!(i -> sum(eachrow(J)[i].^2) > 0, sortseq)
-    J = J[sortseq, sortseq]
+    #=sortseq = sortperm(diag(J).^2, rev=true)=#
+    #=filter!(i -> sum(eachrow(J)[i].^2) > 0, sortseq)=#
+    #=J = J[sortseq, sortseq]=#
+    #=layerSpecs = layerSpecs[sortseq]=#
+    #=momenta = momenta[sortseq]=#
+
+    # go to diagonal basis of J, to make matrix sparse
+    stargraph = 0 .* J
+    stargraph[diagind(stargraph)], unitary = eigen(Hermitian(J))
+    sortseq = sortperm(diag(stargraph).^2, rev=true)
+    unitary = unitary[:, sortseq]
+    filter!(i -> abs(stargraph[i, i]) > tolerance, sortseq)
+    stargraph = stargraph[sortseq, sortseq]
     layerSpecs = layerSpecs[sortseq]
-    momenta = momenta[sortseq]
 
     # obtain Hamiltonian with sorted Kondo matrix
     hamiltonian = BilayerLEE(
-                             J,
+                             stargraph,
                              hamiltDetails["⟂"],
                              layerSpecs;
                              globalField=1e-8,
@@ -174,7 +179,7 @@ end
             # check if they come from same layer. We are
             # not interested in inter-layer correlations.
             if layerSpecs[i] == layerSpecs[j] == type
-                corrName = "$(name)-$(momenta[i])-$(momenta[j])"
+                corrName = "$name-$i-$j"
 
                 # the i_th index along the Kondo matrix will be
                 # at the position 3 + 2 * i in the hilbert space
@@ -195,7 +200,6 @@ end
                       silent=true,
                       maxMaxSize=maxSize,
                      )
-    #=println(results)=#
     @assert results["exitCode"] == 0
 
     for (name, (type, _)) in correlation
@@ -203,17 +207,21 @@ end
             corrResults[name] = results[name]
             continue
         end
+        rotatedCorrMatrix = zeros(2 * length(pointsUpperHalf), 2 * length(pointsUpperHalf))
+        for (i, j) in Iterators.product(eachindex(pointsUpperHalf), eachindex(pointsUpperHalf))
+            if i > length(layerSpecs) || j > length(layerSpecs) || layerSpecs[i] ≠ type || layerSpecs[j] ≠ type
+                rotatedCorrMatrix[i, j] = 0.
+                continue
+            end
+            corrName = ifelse(i < j, "$(name)-$(i)-$(j)", "$(name)-$(j)-$(i)")
+            rotatedCorrMatrix[i, j] = results[corrName]
+        end
+        corrMatrix = unitary * rotatedCorrMatrix * unitary'
         for (index, (p1, p2)) in enumerate(Iterators.product(momentumPoints, momentumPoints))
             if p1 ∈ pointsUpperHalf && p2 ∈ pointsUpperHalf
-                if (p1, type) ∉ collect(zip(momenta, layerSpecs)) || (p2, type) ∉ collect(zip(momenta, layerSpecs))
-                    corrResults[name][index] = 0.
-                    continue
-                end
-                corrName = "$(name)-$(p1)-$(p2)"
-                if corrName ∉ keys(results)
-                    corrName = "$(name)-$(p2)-$(p1)"
-                end
-                corrResults[name][index] = results[corrName]
+                i1 = findfirst(==(p1), pointsUpperHalf)
+                i2 = findfirst(==(p2), pointsUpperHalf)
+                corrResults[name][index] = corrMatrix[i1, i2]
             else
                 sign = 1
                 nestedMomenta = []
@@ -227,15 +235,9 @@ end
                         push!(nestedMomenta, map2DTo1D(nested..., size_BZ))
                     end
                 end
-                if (nestedMomenta[1], type) ∉ collect(zip(momenta, layerSpecs)) || (nestedMomenta[2], type) ∉ collect(zip(momenta, layerSpecs))
-                    corrResults[name][index] = 0.
-                    continue
-                end
-                corrName = "$(name)-$(nestedMomenta[1])-$(nestedMomenta[2])"
-                if corrName ∉ keys(results)
-                    corrName = "$(name)-$(nestedMomenta[2])-$(nestedMomenta[1])"
-                end
-                corrResults[name][index] = sign * results[corrName]
+                i1 = findfirst(==(nestedMomenta[1]), pointsUpperHalf)
+                i2 = findfirst(==(nestedMomenta[2]), pointsUpperHalf)
+                corrResults[name][index] = sign * corrMatrix[i1, i2]
             end
         end
     end
