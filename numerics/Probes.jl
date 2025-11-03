@@ -109,7 +109,6 @@ end
         J[indices, indices] = hamiltDetails[k][pointsUpperHalf, pointsUpperHalf]
         append!(layerSpecs, repeat([k], length(pointsUpperHalf)))
     end
-
     # we also store which index of the
     # matrix stores which momentum point
     #=momenta = repeat(pointsUpperHalf, outer=2)=#
@@ -124,12 +123,19 @@ end
 
     # go to diagonal basis of J, to make matrix sparse
     stargraph = 0 .* J
-    stargraph[diagind(stargraph)], unitary = eigen(Hermitian(J))
-    sortseq = sortperm(diag(stargraph).^2, rev=true)
+    unitary = 0 .* J
+    Ed, Ud = eigen(Hermitian(J[1:length(pointsUpperHalf), 1:length(pointsUpperHalf)]))
+    Ef, Uf = eigen(Hermitian(J[(end-length(pointsUpperHalf)+1):end, (end-length(pointsUpperHalf)+1):end]))
+    stargraph[1:length(pointsUpperHalf), 1:length(pointsUpperHalf)] .= Ed
+    stargraph[(end-length(pointsUpperHalf)+1):end, (end-length(pointsUpperHalf)+1):end] .= Ef
+    unitary[1:length(pointsUpperHalf), 1:length(pointsUpperHalf)] .= Ud
+    unitary[(end-length(pointsUpperHalf)+1):end, (end-length(pointsUpperHalf)+1):end] .= Uf
+    sortseq = sortperm(diag(stargraph), rev=false)
     unitary = unitary[:, sortseq]
     filter!(i -> abs(stargraph[i, i]) > tolerance, sortseq)
     stargraph = stargraph[sortseq, sortseq]
     layerSpecs = layerSpecs[sortseq]
+    #=println(layerSpecs)=#
 
     # obtain Hamiltonian with sorted Kondo matrix
     hamiltonian = BilayerLEE(
@@ -200,6 +206,7 @@ end
                       silent=true,
                       maxMaxSize=maxSize,
                      )
+    #=println([round(r, digits=4) for (k, r) in results if startswith(k, "SF-fkk")])=#
     @assert results["exitCode"] == 0
 
     for (name, (type, _)) in correlation
@@ -217,11 +224,17 @@ end
             rotatedCorrMatrix[i, j] = results[corrName]
         end
         corrMatrix = unitary * rotatedCorrMatrix * unitary'
+        #=println(name)=#
+        #=display(corrMatrix)=#
         for (index, (p1, p2)) in enumerate(Iterators.product(momentumPoints, momentumPoints))
             if p1 ∈ pointsUpperHalf && p2 ∈ pointsUpperHalf
                 i1 = findfirst(==(p1), pointsUpperHalf)
                 i2 = findfirst(==(p2), pointsUpperHalf)
-                corrResults[name][index] = corrMatrix[i1, i2]
+                if type == "d"
+                    corrResults[name][index] = corrMatrix[i1, i2]
+                else
+                    corrResults[name][index] = corrMatrix[length(pointsUpperHalf) + i1, length(pointsUpperHalf) + i2]
+                end
             else
                 sign = 1
                 nestedMomenta = []
@@ -237,10 +250,15 @@ end
                 end
                 i1 = findfirst(==(nestedMomenta[1]), pointsUpperHalf)
                 i2 = findfirst(==(nestedMomenta[2]), pointsUpperHalf)
-                corrResults[name][index] = sign * corrMatrix[i1, i2]
+                if type == "d"
+                    corrResults[name][index] = sign * corrMatrix[i1, i2]
+                else
+                    corrResults[name][index] = sign * corrMatrix[length(pointsUpperHalf) + i1, length(pointsUpperHalf) + i2]
+                end
             end
         end
     end
+    #=println(corrResults)=#
     #=E = Dict()=#
     #=U = Dict()=#
     #=sortFD = Dict()=#

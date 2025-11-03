@@ -214,8 +214,8 @@ function AuxiliaryCorrelations(
     correlations = Dict(
                         "SF-fmax" => cR -> maximum(abs.(cR["SF-fkk"])),
                         "SF-dmax" => cR -> maximum(abs.(cR["SF-dkk"])),
-                        "SF-f0" => cR -> sum([abs(cR["SF-fkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs)]) / length(momentumPoints),
-                        "SF-d0" => cR -> sum([abs(cR["SF-dkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs)]) / length(momentumPoints),
+                        "SF-f0" => cR -> sum([abs(cR["SF-fkk"][index] * NNFunc(k1, k2, size_BZ)) for (index, (k1, k2)) in enumerate(momentumPairs)]) / length(momentumPoints),
+                        "SF-d0" => cR -> sum([abs(cR["SF-dkk"][index] * NNFunc(k1, k2, size_BZ)) for (index, (k1, k2)) in enumerate(momentumPairs)]) / length(momentumPoints),
                         "SF-fdpm" => cR -> abs(cR["SF-fdpm"]),
                         "SF-fdzz" => cR -> abs(cR["SF-fdzz"]),
                         "SF-fPF" => cR -> count(>(0), abs.([cR["SF-fkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])) / length(momentumPoints),
@@ -235,8 +235,8 @@ function AuxiliaryCorrelations(
     return figPaths
 end
 
-size_BZ = 9
-J = 0.0:0.01:0.02
-Wf = 0.0:-0.01:-0.02
+size_BZ = 33
+J = 0.0:0.01:0.1
+Wf = -0.0:-0.02:-0.2
 #=RGFlow(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, 0:1.5:0, size_BZ; loadData=true)=#
-AuxiliaryCorrelations(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, size_BZ, 800, Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0"); loadData=false)
+AuxiliaryCorrelations(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, size_BZ, 802, Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0"); loadData=false)
