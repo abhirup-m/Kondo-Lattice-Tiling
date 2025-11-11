@@ -330,7 +330,7 @@ function SavePath(
     end
     path = "$(prefix)_$(size_BZ)"
 
-    coupNames = ["omega_by_t", "Jf", "Jd", "J⟂", "Wf", "Wd", "μ"]
+    coupNames = ["omega_by_t", "Jf", "Jd", "J⟂", "Wf", "Wd", "μf", "μd"]
     for k in coupNames
         path *= "_$(couplings[k])"
     end

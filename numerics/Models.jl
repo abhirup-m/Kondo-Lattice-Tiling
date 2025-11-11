@@ -334,6 +334,9 @@ end
 function BilayerLEE(
         J::Matrix{Float64},
         Jp::Float64,
+        hybrid::Vector{Float64},
+        μ::Dict{String, Float64},
+        impCorr::Dict{String, Float64},
         layerSpecs::Vector{String};
         globalField::Number=0,
         couplingTolerance::Number=1e-15,
@@ -343,38 +346,40 @@ function BilayerLEE(
     # Sf   Sd   γ1   γ2  ...
     # 1,2, 3,4, 5,6, 7,8 ...
     hamiltonian = Tuple{String, Vector{Int64}, Float64}[]
-    push!(hamiltonian,
-          ("nn",  [1, 3], Jp / 4)
-         ) # n_{d up, n_{0 up}
-    push!(hamiltonian,
-          ("nn",  [1, 4], -Jp / 4)
-         ) # n_{d up, n_{0 down}
-    push!(hamiltonian,
-          ("nn",  [2, 3], -Jp / 4)
-         ) # n_{d down, n_{0 up}
-    push!(hamiltonian,
-          ("nn",  [2, 4], Jp / 4)
-         ) # n_{d down, n_{0 down}
-    push!(hamiltonian,
-          ("+-+-",  [1, 2, 4, 3], Jp / 2)
-         ) # S_d^+ S_0^-
-    push!(hamiltonian,
-          ("+-+-",  [2, 1, 3, 4], Jp / 2)
-         ) # S_d^- S_0^+
+    if abs(Jp) > couplingTolerance
+        push!(hamiltonian,
+              ("nn",  [1, 3], Jp / 4)
+             ) # n_{d up, n_{0 up}
+        push!(hamiltonian,
+              ("nn",  [1, 4], -Jp / 4)
+             ) # n_{d up, n_{0 down}
+        push!(hamiltonian,
+              ("nn",  [2, 3], -Jp / 4)
+             ) # n_{d down, n_{0 up}
+        push!(hamiltonian,
+              ("nn",  [2, 4], Jp / 4)
+             ) # n_{d down, n_{0 down}
+        push!(hamiltonian,
+              ("+-+-",  [1, 2, 4, 3], Jp / 2)
+             ) # S_d^+ S_0^-
+        push!(hamiltonian,
+              ("+-+-",  [2, 1, 3, 4], Jp / 2)
+             ) # S_d^- S_0^+
+    end
 
     # kondo terms
     for i in 1:size(J)[1]
+        if layerSpecs[i] == "f"
+            imp = 1
+        else
+            imp = 3
+        end
+        bath_i = 3 + 2 * i
         for j in 1:size(J)[2]
             J_ij = J[i, j]
             if abs(J_ij) < couplingTolerance
                 continue
             end
-            if layerSpecs[i] == "f"
-                imp = 1
-            else
-                imp = 3
-            end
-            bath_i = 3 + 2 * i
             bath_j = 3 + 2 * j
             push!(hamiltonian,
                   ("n+-",  [imp, bath_i, bath_j], J_ij / 4)
@@ -395,6 +400,26 @@ function BilayerLEE(
                   ("+-+-",  [imp + 1, imp, bath_i, bath_j + 1], J_ij / 2)
                  ) # S_d^- S_0^+
         end
+        if abs(hybrid[i]) > couplingTolerance
+            push!(hamiltonian, ("+-",  [imp, bath_i], hybrid[i])) # n_{d up, n_{0 up}
+            push!(hamiltonian, ("+-",  [imp + 1, bath_i + 1], hybrid[i])) # n_{d up, n_{0 up}
+            push!(hamiltonian, ("+-",  [bath_i, imp], hybrid[i])) # n_{d up, n_{0 up}
+            push!(hamiltonian, ("+-",  [bath_i + 1, imp + 1], hybrid[i])) # n_{d up, n_{0 up}
+        end
+    end
+
+    for (site, k) in zip([1, 3], ["f", "d"])
+        if abs(μ[k]) > couplingTolerance
+            push!(hamiltonian, ("n",  [site], -μ[k]))
+            push!(hamiltonian, ("n",  [site + 1], -μ[k]))
+        end
+    end
+
+    if abs(impCorr["f"]) > couplingTolerance
+        push!(hamiltonian, ("nn",  [1, 2], impCorr["f"]))
+    end
+    if abs(impCorr["d"]) > couplingTolerance
+        push!(hamiltonian, ("nn",  [3, 4], impCorr["d"]))
     end
 
     # global magnetic field (to lift any trivial degeneracy)

@@ -10,7 +10,7 @@
 
 ENV["PYCALL_GC_FINALIZE"] = "0"
 using Distributed
-@everywhere using ProgressMeter, PyPlot, LaTeXStrings
+@everywhere using ProgressMeter, PyPlot, LaTeXStrings, PDFmerger
 if "SLURM_SUBMIT_DIR" in keys(ENV)
     addprocs(SlurmManager())
 end
@@ -30,10 +30,10 @@ end
 @everywhere include(submitDir * "Probes.jl")
 @everywhere include(submitDir * "PltStyle.jl")
 
-@everywhere function insertWfJ(couplings, Wf, J, μ)
+@everywhere function insertWfJ(couplings, Wf, J, μd)
     couplings["Wf"] = Wf
     couplings["J⟂"] = J
-    couplings["μ"] = μ
+    couplings["μd"] = μd
     return couplings
 end
 
@@ -194,14 +194,17 @@ function AuxiliaryCorrelations(
                             "SF-dkk" => ("d", (i, j; factor = 1) -> [("+-+-", [3, 4, i+1, j], factor / 2), ("+-+-", [4, 3, i, j+1], factor / 2), ("n+-", [3, i, j], factor / 4), ("n+-", [3, i+1, j+1], -factor / 4), ("n+-", [4, i, j], -factor / 4), ("n+-", [4, i+1, j+1], factor / 4)]),
                             "SF-fdpm" => ("i", [("+-+-", [1, 2, 4, 3], 1 / 2), ("+-+-", [2, 1, 3, 4], 1 / 2)]),
                             "SF-fdzz" => ("i", [("nn", [1, 3], 1 / 4), ("nn", [1, 4], -1 / 4), ("nn", [2, 3], -1 / 4), ("nn", [2, 4], 1 / 4)]),
+                            "ndu" => ("i", [("n", [3], 1.)]),
+                            "ndd" => ("i", [("n", [4], 1.)]),
+                            "nfu" => ("i", [("n", [1], 1.)]),
+                            "nfd" => ("i", [("n", [2], 1.)]),
                        )
             
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
-    fermiShell = argmin(abs.([dispersion[i] - couplings["μ"] for i in 1:div(size_BZ+1, 2)]))
-    momentumPoints = getIsoEngCont(dispersion, dispersion[fermiShell])
-    @assert issorted(momentumPoints)
+    #=fermiShell = Dict(k => argmin(abs.([dispersion[i] - couplings["μ$k"] for i in 1:div(size_BZ+1, 2)])) for k in ["f", "d"])=#
+    momentumPoints = Dict(k => getIsoEngCont(dispersion, 0.) for k in ["f", "d"])
     combinedResults = @showprogress pmap(WfJ -> AuxiliaryCorrelations(size_BZ,
-                                                      insertWfJ(couplings, WfJ..., couplings["μ"]),
+                                                      insertWfJ(couplings, WfJ..., couplings["μd"]),
                                                       microCorrelation,
                                                       momentumPoints,
                                                       maxSize;
@@ -210,33 +213,60 @@ function AuxiliaryCorrelations(
                                          parameterSpace
                                         )
 
-    momentumPairs = vec(collect(Iterators.product(momentumPoints, momentumPoints)))
+    momentumPairs = Dict(k => vec(collect(Iterators.product(momentumPoints[k], momentumPoints[k]))) for k in ["f", "d"])
     correlations = Dict(
                         "SF-fmax" => cR -> maximum(abs.(cR["SF-fkk"])),
                         "SF-dmax" => cR -> maximum(abs.(cR["SF-dkk"])),
-                        "SF-f0" => cR -> sum([abs(cR["SF-fkk"][index] * NNFunc(k1, k2, size_BZ)) for (index, (k1, k2)) in enumerate(momentumPairs)]) / length(momentumPoints),
-                        "SF-d0" => cR -> sum([abs(cR["SF-dkk"][index] * NNFunc(k1, k2, size_BZ)) for (index, (k1, k2)) in enumerate(momentumPairs)]) / length(momentumPoints),
+                        "SF-f0" => cR -> sum([abs(cR["SF-fkk"][index] * NNFunc(k1, k2, size_BZ)) for (index, (k1, k2)) in enumerate(momentumPairs["f"])]) / length(momentumPoints["f"]),
+                        "SF-d0" => cR -> maximum(abs.(cR["SF-dkk"])),
+                        #="SF-d0" => cR -> sum(abs.(cR["SF-dkk"])) / length(momentumPoints["d"]),=#
                         "SF-fdpm" => cR -> abs(cR["SF-fdpm"]),
                         "SF-fdzz" => cR -> abs(cR["SF-fdzz"]),
-                        "SF-fPF" => cR -> count(>(0), abs.([cR["SF-fkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])) / length(momentumPoints),
-                        "SF-dPF" => cR -> count(>(0), abs.([cR["SF-dkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])) / length(momentumPoints),
-                        #="SF-dNN" => cR -> abs(sum([cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if node in (k1, k2)])),=#
-                        #="SF-dAA" => cR -> abs(sum([cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if antinode in (k1, k2)])),=#
-                        #="Sdz" => cR -> abs(cR["Sdz"]),=#
-                        #="PF" => cR -> 0. + count(v -> abs(v) > 1e-5, [cR["SF-dk1k1-f"][index] for (index, (k1, k2)) in enumerate(momentumPairs) if k1 == k2])=#
+                        "SF-fPF" => cR -> count(>(0), abs.([cR["SF-fkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs["f"]) if k1 == k2])) / length(momentumPoints["f"]),
+                        "SF-dPF" => cR -> count(>(0), abs.([cR["SF-dkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs["d"]) if k1 == k2])) / length(momentumPoints["d"]),
+                        "Sdz" => cR -> 0.5 * abs(cR["ndu"] - cR["ndd"]),
+                        "Sfz" => cR -> 0.5 * abs(cR["nfu"] - cR["nfd"]),
+                        "nd" => cR -> 0.5 * abs(cR["ndu"] + cR["ndd"]),
+                        "nf" => cR -> 0.5 * abs(cR["nfu"] + cR["nfd"]),
                        )
     figPaths = []
     plottableResults = Dict{String, Vector{Float64}}()
     for (name, func) in correlations
         plottableResults[name] = [func(cR) for cR in vec(collect(combinedResults))]
     end
-    #=saveName = "$(saveNamePrefix)-$(size_BZ)-$(maxSize)" * ExtendedSaveName(couplingsRange)=#
-    RowPlots(plottableResults, collect(parameterSpace), [("SF-f0", "SF-d0"), ("SF-fdpm", "SF-fdzz"), ("SF-fPF", "SF-dPF")], [(L"$\langle {S_f\cdot S_{f0}}\rangle$",L"$\langle {S_d\cdot S_{d0}}\rangle$"), (L"$\langle {S_f^+S_d^- + \text{h.c.}}\rangle$", L"$\langle {S_f^zS_d^z}\rangle$"), ("f-PF", "d-PF")], ["in-plane correlation", "out-of-plane correlation", "Pole Fraction"], ("J", "Wf"), "locCorr.pdf")
-    return figPaths
+    eta = round(-couplings["μd"] + couplings["Ud"]/2, digits=3)
+    return RowPlots(plottableResults,
+                    collect(parameterSpace),
+                    [("SF-f0", "SF-d0"), ("SF-fdpm", "SF-fPF"), ("nf", "nd")],
+                    [(L"$\langle {S_f\cdot S_{f0}}\rangle$",L"$\langle {S_d\cdot S_{d0}}\rangle$"), (L"$\langle {S_f^+S_d^- + \text{h.c.}}\rangle$", "f-PF"), (L"n_f", L"n_d")],
+                    ["in-plane correlation", L"$Sd.Sf$, PF", "filling"],
+                    ("J", "Wf"),
+                    "locCorr-$(eta).pdf",
+                    L"$\eta_d = %$(eta)$",
+                    ["SF-d0",]
+                   )
+    #=return RowPlots(plottableResults, collect(parameterSpace), [("SF-f0", "SF-d0"), ("SF-fdpm", "SF-fPF"), ("Sfz", "Sdz"), ("nf", "nd")], [(L"$\langle {S_f\cdot S_{f0}}\rangle$",L"$\langle {S_d\cdot S_{d0}}\rangle$"), (L"$\langle {S_f^+S_d^- + \text{h.c.}}\rangle$", "f-PF"), (L"S_f^z", L"S_d^z"), (L"n_f", L"n_d")], ["in-plane correlation", L"$Sd.Sf$, PF", "mag.", "filling"], ("J", "Wf"), "locCorr-$(eta).pdf", L"$\eta_d = %$(eta)$")=#
 end
 
 size_BZ = 33
-J = 0.0:0.01:0.1
-Wf = -0.0:-0.02:-0.2
-#=RGFlow(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, 0:1.5:0, size_BZ; loadData=true)=#
-AuxiliaryCorrelations(Dict("omega_by_t" => -2., "μ" => 0.0, "Jf" => 0.1, "Jd" => 0.1, "J⟂" => 0., "Wd" => -0.0, "Wf" => 0.), Wf, J, size_BZ, 802, Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0"); loadData=false)
+J = 0.01:0.01:0.1
+Wf = -0.05:-0.01:-0.16
+paths = String[]
+couplings = Dict("omega_by_t" => -2.,
+                 "Uf" => 3.,
+                 "Ud" => 2.,
+                 "Jf" => 0.1,
+                 "Jd" => 0.1,
+                 "J⟂" => 0.,
+                 "Wd" => -0.0,
+                 "Wf" => 0.
+                )
+couplings["μf"] = couplings["Uf"]/2
+for μ in 0.6:0.2:1.4
+    couplings["μd"] = μ
+    #=RGFlow(couplings, Wf, J, 0:1.5:0, size_BZ; loadData=true)=#
+    path = AuxiliaryCorrelations(couplings, Wf, J, size_BZ, 502, Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0"); loadData=true)
+    push!(paths, path)
+end
+merge_pdfs(paths, "locCorr.pdf", cleanup=true)
+

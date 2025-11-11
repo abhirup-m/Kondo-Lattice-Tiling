@@ -1,5 +1,5 @@
-CMAP = "Spectral"
-CMAP_sc = "turbo_r"
+CMAP = "magma_r"
+CMAP_sc = "Spectral_r"
 cmap_3 = PyPlot.matplotlib.cm.get_cmap(CMAP, 3) # Number of colors is one less than number of bounds
 norm_3 = PyPlot.matplotlib.colors.BoundaryNorm([0, 0.33, 0.66, 1], cmap_3.N)
 rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
@@ -60,7 +60,6 @@ function HM4D(
                             c=scData,
                             cmap = "magma_r",
                             norm=normSc,
-                            #=norm="log",=#
                             s=100
                            )
             cb_f = fig.colorbar(hm_f, shrink=0.5, pad=0.12, location="left")
@@ -132,6 +131,8 @@ function RowPlots(
         titles::Vector,
         axLabels,
         saveName,
+        suptitle,
+        lognorm,
     )
     xlims = (last.(parameters)[1], last.(parameters)[end])
     ylims = (first.(parameters)[1], first.(parameters)[end])
@@ -142,13 +143,15 @@ function RowPlots(
     fig.tight_layout()
     for (i, (hmKey, scKey)) in enumerate(heatmaps)
         ax = length(heatmaps) > 1 ? axes[i] : axes
-        hm = ax.imshow(reshape(data[hmKey], size(parameters)...), origin="lower", extent=(xlims..., ylims...), cmap=CMAP, aspect="auto")
+        norm = hmKey ∈ lognorm ? PyPlot.matplotlib.colors.LogNorm() : nothing
+        hm = ax.imshow(reshape(data[hmKey], size(parameters)...), origin="lower", extent=(xlims..., ylims...), cmap=CMAP, aspect="auto", norm=norm)
         sparseData = [v for (v, (y, x)) in zip(data[scKey], vec(collect(parameters))) if x ∈ sparseX && y ∈ sparseY]
+        norm = scKey ∈ lognorm ? PyPlot.matplotlib.colors.LogNorm() : nothing
         sc = ax.scatter(repeat(sparseX, inner=length(sparseY)),
                         repeat(sparseY, outer=length(sparseX)),
-                        c=sparseData, s=10, cmap=CMAP,
+                        c=sparseData, s=10, cmap=CMAP_sc,
+                        norm=norm,
                        )
-        sc.set_edgecolor("black")
         ax.set_xlabel(axLabels[1])
         ax.set_ylabel(axLabels[2])
         ax.set_title(titles[i], pad=10)
@@ -156,6 +159,8 @@ function RowPlots(
         fig.colorbar(hm, shrink=0.5, pad=-0.3, label=cbarLabels[i][1])
         fig.colorbar(sc, location="left", shrink=0.5, pad=0.22, label=cbarLabels[i][2],)
     end
+    fig.suptitle(suptitle, y=0.92)
     fig.tight_layout()
     fig.savefig(saveName, bbox_inches="tight")
+    return saveName
 end

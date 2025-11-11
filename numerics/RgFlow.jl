@@ -1,4 +1,4 @@
-using LinearAlgebra, JLD2, JSON3
+using LinearAlgebra, JLD2
 
 function initialiseKondoJ(
         size_BZ::Int64, 
@@ -63,11 +63,10 @@ end
     kxVals = first.(kvals)
     kyVals = last.(kvals)
     omega_by_t = bareCouplings["omega_by_t"]
-    μ = bareCouplings["μ"]
+    μ = 0 # bareCouplings["μ"]
     W = Dict("f" => bareCouplings["Wf"], "d" => bareCouplings["Wd"])
 
     saveJLD = joinpath(SAVEDIR, SavePath("rgflow", size_BZ, bareCouplings, "jld2"))
-    saveJSON = joinpath(SAVEDIR, SavePath("rgflow", size_BZ, bareCouplings, "json"))
     mkpath(SAVEDIR)
     if isfile(saveJLD) && loadData
         return load(saveJLD)
@@ -81,7 +80,6 @@ end
     densityOfStates, dispersionArray = getDensityOfStates(tightBindDisp, size_BZ)
 
     cutOffEnergies = getCutOffEnergy(size_BZ)
-    averageDOS = [sum(densityOfStates[getIsoEngCont(dispersionArray, energy)]) * 2π / size_BZ for energy in cutOffEnergies]
 
     # Kondo coupling must be stored in a 3D matrix. Two of the dimensions store the 
     # incoming and outgoing momentum indices, while the third dimension stores the 
