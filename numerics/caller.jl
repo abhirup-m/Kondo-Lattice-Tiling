@@ -32,6 +32,7 @@ end
 
 @everywhere function insertWfJ(couplings, Wf, J, μd)
     couplings["Wf"] = Wf
+    couplings["Wd"] = Wf * couplings["Wd_by_Wf"]
     couplings["J⟂"] = J
     couplings["μd"] = μd
     return couplings
@@ -194,6 +195,7 @@ function AuxiliaryCorrelations(
                             "SF-dkk" => ("d", (i, j; factor = 1) -> [("+-+-", [3, 4, i+1, j], factor / 2), ("+-+-", [4, 3, i, j+1], factor / 2), ("n+-", [3, i, j], factor / 4), ("n+-", [3, i+1, j+1], -factor / 4), ("n+-", [4, i, j], -factor / 4), ("n+-", [4, i+1, j+1], factor / 4)]),
                             "SF-fdpm" => ("i", [("+-+-", [1, 2, 4, 3], 1 / 2), ("+-+-", [2, 1, 3, 4], 1 / 2)]),
                             "SF-fdzz" => ("i", [("nn", [1, 3], 1 / 4), ("nn", [1, 4], -1 / 4), ("nn", [2, 3], -1 / 4), ("nn", [2, 4], 1 / 4)]),
+                            "CF-dkk" => ("d", (i, j; factor = 1) -> [("++--", [3, 4, i+1, j], factor / 2), ("++--", [4, 3, i, j+1], factor / 2)]),
                             "ndu" => ("i", [("n", [3], 1.)]),
                             "ndd" => ("i", [("n", [4], 1.)]),
                             "nfu" => ("i", [("n", [1], 1.)]),
@@ -217,10 +219,12 @@ function AuxiliaryCorrelations(
     correlations = Dict(
                         "SF-fmax" => cR -> maximum(abs.(cR["SF-fkk"])),
                         "SF-dmax" => cR -> maximum(abs.(cR["SF-dkk"])),
-                        "SF-f0" => cR -> sum([abs(cR["SF-fkk"][index] * NNFunc(k1, k2, size_BZ)) for (index, (k1, k2)) in enumerate(momentumPairs["f"])]) / length(momentumPoints["f"]),
-                        "SF-d0" => cR -> maximum(abs.(cR["SF-dkk"])),
+                        "SF-f0" => cR -> -sum([abs(cR["SF-fkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs["f"])]) / length(momentumPoints["f"]),
+                        #="SF-d0" => cR -> maximum(abs.(cR["SF-dkk"])),=#
                         #="SF-d0" => cR -> sum(abs.(cR["SF-dkk"])) / length(momentumPoints["d"]),=#
-                        "SF-fdpm" => cR -> abs(cR["SF-fdpm"]),
+                        "SF-d0" => cR -> -sum([abs(cR["SF-dkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs["d"])]) / length(momentumPoints["d"]),
+                        "SF-fd" => cR -> -(cR["SF-fdpm"] + cR["SF-fdzz"]),
+                        "CF-d0" => cR -> sum(abs.(cR["CF-dkk"])) / length(momentumPoints["d"]),
                         "SF-fdzz" => cR -> abs(cR["SF-fdzz"]),
                         "SF-fPF" => cR -> count(>(0), abs.([cR["SF-fkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs["f"]) if k1 == k2])) / length(momentumPoints["f"]),
                         "SF-dPF" => cR -> count(>(0), abs.([cR["SF-dkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs["d"]) if k1 == k2])) / length(momentumPoints["d"]),
@@ -237,36 +241,38 @@ function AuxiliaryCorrelations(
     eta = round(-couplings["μd"] + couplings["Ud"]/2, digits=3)
     return RowPlots(plottableResults,
                     collect(parameterSpace),
-                    [("SF-f0", "SF-d0"), ("SF-fdpm", "SF-fPF"), ("nf", "nd")],
-                    [(L"$\langle {S_f\cdot S_{f0}}\rangle$",L"$\langle {S_d\cdot S_{d0}}\rangle$"), (L"$\langle {S_f^+S_d^- + \text{h.c.}}\rangle$", "f-PF"), (L"n_f", L"n_d")],
-                    ["in-plane correlation", L"$Sd.Sf$, PF", "filling"],
+                    [("SF-f0", "SF-d0"), ("SF-fd", "SF-fPF"), ("CF-d0", "nd")],
+                    [(L"$-\langle {S_f\cdot S_{f0}}\rangle$",L"$-\langle {S_d\cdot S_{d0}}\rangle$"), (L"$-\langle S_f\cdot S_d\rangle$", "f-PF"), (L"CF", L"n_d")],
+                    ["in-plane correlation", L"$Sd.Sf$, PF", "charge"],
                     ("J", "Wf"),
                     "locCorr-$(eta).pdf",
                     L"$\eta_d = %$(eta)$",
-                    ["SF-d0",]
+                    []
                    )
     #=return RowPlots(plottableResults, collect(parameterSpace), [("SF-f0", "SF-d0"), ("SF-fdpm", "SF-fPF"), ("Sfz", "Sdz"), ("nf", "nd")], [(L"$\langle {S_f\cdot S_{f0}}\rangle$",L"$\langle {S_d\cdot S_{d0}}\rangle$"), (L"$\langle {S_f^+S_d^- + \text{h.c.}}\rangle$", "f-PF"), (L"S_f^z", L"S_d^z"), (L"n_f", L"n_d")], ["in-plane correlation", L"$Sd.Sf$, PF", "mag.", "filling"], ("J", "Wf"), "locCorr-$(eta).pdf", L"$\eta_d = %$(eta)$")=#
 end
 
-size_BZ = 33
-J = 0.01:0.01:0.1
+size_BZ = 49
+J = 0.0:0.01:0.1
 Wf = -0.05:-0.01:-0.16
 paths = String[]
 couplings = Dict("omega_by_t" => -2.,
-                 "Uf" => 3.,
-                 "Ud" => 2.,
+                 "Uf" => 2.,
                  "Jf" => 0.1,
                  "Jd" => 0.1,
                  "J⟂" => 0.,
                  "Wd" => -0.0,
-                 "Wf" => 0.
+                 "Wd_by_Wf" => 0.5,
                 )
+couplings["Ud"] = couplings["Uf"] * couplings["Wd_by_Wf"]
 couplings["μf"] = couplings["Uf"]/2
-for μ in 0.6:0.2:1.4
-    couplings["μd"] = μ
+for μd in (0.4:0.2:1.0) .* couplings["Ud"] / 2
+#=for μ in 0.6:0.2:1.4=#
+    couplings["μd"] = μd
     #=RGFlow(couplings, Wf, J, 0:1.5:0, size_BZ; loadData=true)=#
-    path = AuxiliaryCorrelations(couplings, Wf, J, size_BZ, 502, Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0"); loadData=true)
+    path = AuxiliaryCorrelations(couplings, Wf, J, size_BZ, 611, 
+                                 Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0");
+                                 loadData=true)
     push!(paths, path)
 end
 merge_pdfs(paths, "locCorr.pdf", cleanup=true)
-

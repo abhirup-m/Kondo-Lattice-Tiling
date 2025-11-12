@@ -88,15 +88,16 @@ end
     # only momentum points with ky ≥ 0 need to be
     # solved for, the rest can be mapped exactly
     truncatedPoints = Dict()
-    truncatedPoints["f"] = momentumPoints["f"]
-    truncatedPoints["d"] = []
-    for signs in Iterators.product([1, -1], [1, -1])
-        quadrantPoints = filter(p -> all(sign.(map1DTo2D(p, size_BZ)) .== signs), momentumPoints["d"])
-        distances = abs.([diff(map1DTo2D(p, size_BZ).^2)[1] for p in quadrantPoints])
-        push!(truncatedPoints["d"], quadrantPoints[argmin(distances)])
-        push!(truncatedPoints["d"], quadrantPoints[argmax(distances)])
+    for k in ["f", "d"]
+        truncatedPoints[k] = filter(p -> map1DTo2D(p, size_BZ)[2] ≥ 0, momentumPoints[k])
     end
-    #=println(diag(hamiltDetails["d"])[truncatedPoints["d"]])=#
+    #=for signs in Iterators.product([1, -1], [1, -1])=#
+    #=    quadrantPoints = filter(p -> all(sign.(map1DTo2D(p, size_BZ)) .== signs), momentumPoints["d"])=#
+    #=    distances = abs.([diff(map1DTo2D(p, size_BZ).^2)[1] for p in quadrantPoints])=#
+    #=    push!(truncatedPoints["d"], quadrantPoints[argmin(distances)])=#
+    #=    push!(truncatedPoints["d"], quadrantPoints[argmax(distances)])=#
+    #=end=#
+
     totalSize = sum(length.(values(truncatedPoints)))
 
     # define Kondo matrix just for the upper half, for both layers
@@ -131,19 +132,11 @@ end
         end
     end
 
-    #=display(J[end-3:end, end-3:end])=#
-    #=println("----")=#
-    #=display(stargraph[end-3:end, end-3:end])=#
-    sortseq = sortperm(diag(stargraph), rev=false)
-    #=println(layerSpecs)=#
-    #=println(sortseq)=#
-    #=unitary = unitary[:, sortseq]=#
+    sortseq = sortperm(diag(stargraph), rev=true)
     filter!(i -> abs(stargraph[i, i]) > tolerance, sortseq)
-    #=println(sortseq)=#
     stargraph = stargraph[sortseq, sortseq]
     layerSpecs = layerSpecs[sortseq]
     hybrid = hybrid[sortseq]
-    #=println(layerSpecs)=#
 
     # obtain Hamiltonian with sorted Kondo matrix
     hamiltonian = BilayerLEE(
@@ -153,7 +146,7 @@ end
                              hamiltDetails["μ"],
                              hamiltDetails["impCorr"],
                              layerSpecs;
-                             globalField=0e-8,
+                             globalField=1e-8,
                              couplingTolerance=1e-10,
                             )
     # split hamiltonian into chunks for iterative diagonalisation.
@@ -186,7 +179,7 @@ end
 
         # If the type is not purely impurity, we need a
         # matrix to store the k-dependence.
-        corrResults[name] = zeros(length(momentumPoints[type])^2)
+        corrResults[name] = Dict()
 
         for (i, j) in Iterators.product(1:length(layerSpecs), 1:length(layerSpecs))
             if j < i
@@ -211,14 +204,13 @@ end
                       hamiltonianFamily,
                       maxSize;
                       symmetries=Char['N', 'S'],
-                      #=magzReq=(m, N) -> -5 ≤ m ≤ 5,=#
-                      #=occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,=#
+                      magzReq=(m, N) -> -5 ≤ m ≤ 5,
+                      occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,
                       correlationDefDict=corrOps,
                       silent=true,
                       maxMaxSize=maxSize,
                      )
     @assert results["exitCode"] == 0
-    #=println([v for (k, v) in results if startswith(k, "SF-dkk")])=#
 
     for (name, (type, _)) in correlation
         if type == "i"
@@ -239,24 +231,26 @@ end
             rotatedCorrMatrix[sortseq[j], sortseq[i]] = rotatedCorrMatrix[sortseq[i], sortseq[j]]
         end
         corrMatrix = unitary * rotatedCorrMatrix * unitary'
-        if type == "f"
-            for (index, ((i1, p1), (i2, p2))) in enumerate(Iterators.product(enumerate(momentumPoints["f"]), enumerate(momentumPoints["f"])))
-                corrResults[name][index] = corrMatrix[i1, i2]
+        for ((i1, p1), (i2, p2)) in Iterators.product(enumerate(truncatedPoints[type]), enumerate(truncatedPoints[type]))
+            if type == "f"
+                corrResults[name][(p1, p2)] = corrMatrix[i1, i2]
+            else
+                corrResults[name][(p1, p2)] = corrMatrix[length(truncatedPoints["f"]) + i1, length(truncatedPoints["f"]) + i2]
             end
-        else
-            #=display(corrMatrix)=#
-            momentumPairs = vec(collect(Iterators.product(momentumPoints["d"], momentumPoints["d"])))
-            for ((i1, p1), (i2, p2)) in Iterators.product(enumerate(truncatedPoints["d"]), enumerate(truncatedPoints["d"]))
-                index = findfirst(==((p1, p2)), momentumPairs)
-                corrResults[name][index] = corrMatrix[length(truncatedPoints["f"]) + i1, length(truncatedPoints["f"]) + i2]
-                for (index_q, (q1, q2)) in enumerate(momentumPairs)
-                    if all(sign.(map1DTo2D(q1, size_BZ)) .== sign.(map1DTo2D(p1, size_BZ))) && all(sign.(map1DTo2D(q2, size_BZ)) .== sign.(map1DTo2D(p2, size_BZ)))
-                        corrResults[name][index_q] = corrResults[name][index]
-                    end
-                end
-            end
+            p1_prime = Nest(p1, size_BZ)
+            p2_prime = Nest(p2, size_BZ)
+            corrResults[name][(p1_prime, p2)] = -corrResults[name][(p1, p2)]
+            corrResults[name][(p1, p2_prime)] = -corrResults[name][(p1, p2)]
+            corrResults[name][(p1_prime, p2_prime)] = corrResults[name][(p1, p2)]
         end
     end
+    #=println(corrResults["SF-dkk"])=#
+    for (name, (type, _)) in correlation
+        if type == "f" || type == "d"
+            corrResults[name] = [corrResults[name][(k1, k2)] for (k1, k2) in Iterators.product(momentumPoints[type], momentumPoints[type])]
+        end
+    end
+    #=println(corrResults["SF-dkk"])=#
 
     return corrResults
 end

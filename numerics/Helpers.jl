@@ -431,6 +431,7 @@ function NNNFunc(k1, k2, size_BZ)
     end
 end
 
+
 function NNFunc(k1, k2, size_BZ) 
     if isnothing(k1)
         return 1.
@@ -441,3 +442,12 @@ function NNFunc(k1, k2, size_BZ)
 end
 
 
+function Nest(k, size_BZ)
+    kx, ky = map1DTo2D(k, size_BZ)
+    if kx ≥ 0
+        kx_prime, ky_prime = (kx, ky) .- (π, π)
+    else
+        kx_prime, ky_prime = (kx, ky) .- (-π, π)
+    end
+    return map2DTo1D(kx_prime, ky_prime, size_BZ)
+end

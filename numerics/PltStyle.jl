@@ -144,7 +144,13 @@ function RowPlots(
     for (i, (hmKey, scKey)) in enumerate(heatmaps)
         ax = length(heatmaps) > 1 ? axes[i] : axes
         norm = hmKey ∈ lognorm ? PyPlot.matplotlib.colors.LogNorm() : nothing
-        hm = ax.imshow(reshape(data[hmKey], size(parameters)...), origin="lower", extent=(xlims..., ylims...), cmap=CMAP, aspect="auto", norm=norm)
+        hm = ax.imshow(reshape(data[hmKey], size(parameters)...),
+                       origin="lower",
+                       extent=(xlims..., ylims...),
+                       cmap=CMAP,
+                       aspect="auto",
+                       norm=norm
+                      )
         sparseData = [v for (v, (y, x)) in zip(data[scKey], vec(collect(parameters))) if x ∈ sparseX && y ∈ sparseY]
         norm = scKey ∈ lognorm ? PyPlot.matplotlib.colors.LogNorm() : nothing
         sc = ax.scatter(repeat(sparseX, inner=length(sparseY)),
