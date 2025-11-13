@@ -232,6 +232,11 @@ function AuxiliaryCorrelations(
                         "Sfz" => cR -> 0.5 * abs(cR["nfu"] - cR["nfd"]),
                         "nd" => cR -> 0.5 * abs(cR["ndu"] + cR["ndd"]),
                         "nf" => cR -> 0.5 * abs(cR["nfu"] + cR["nfd"]),
+                        "SEE-f" => cR -> cR["SEE-f"],
+                        "SEE-d" => cR -> cR["SEE-d"],
+                        "I2-f-d" => cR -> cR["I2-f-d"],
+                        "I2-f-max" => cR -> cR["I2-f-max"],
+                        "I2-d-max" => cR -> cR["I2-d-max"],
                        )
     figPaths = []
     plottableResults = Dict{String, Vector{Float64}}()
@@ -241,9 +246,9 @@ function AuxiliaryCorrelations(
     eta = round(-couplings["μd"] + couplings["Ud"]/2, digits=3)
     return RowPlots(plottableResults,
                     collect(parameterSpace),
-                    [("SF-f0", "SF-d0"), ("SF-fd", "SF-fPF"), ("CF-d0", "nd")],
-                    [(L"$-\langle {S_f\cdot S_{f0}}\rangle$",L"$-\langle {S_d\cdot S_{d0}}\rangle$"), (L"$-\langle S_f\cdot S_d\rangle$", "f-PF"), (L"CF", L"n_d")],
-                    ["in-plane correlation", L"$Sd.Sf$, PF", "charge"],
+                    [("SF-f0", "SF-d0"), ("SF-fd", "SF-fPF"), ("CF-d0", "nd"), ("SEE-f", "I2-f-d"), ("I2-f-max", "I2-d-max")],
+                    [(L"$-\langle {S_f\cdot S_{f0}}\rangle$",L"$-\langle {S_d\cdot S_{d0}}\rangle$"), (L"$-\langle S_f\cdot S_d\rangle$", "f-PF"), (L"CF", L"n_d"), ("SEE-f", "I2-f-d"), ("I2-f-max", "I2-d-max")],
+                    ["in-plane correlation", L"$Sd.Sf$, PF", "charge", "SEE", "I2"],
                     ("J", "Wf"),
                     "locCorr-$(eta).pdf",
                     L"$\eta_d = %$(eta)$",
@@ -252,7 +257,7 @@ function AuxiliaryCorrelations(
     #=return RowPlots(plottableResults, collect(parameterSpace), [("SF-f0", "SF-d0"), ("SF-fdpm", "SF-fPF"), ("Sfz", "Sdz"), ("nf", "nd")], [(L"$\langle {S_f\cdot S_{f0}}\rangle$",L"$\langle {S_d\cdot S_{d0}}\rangle$"), (L"$\langle {S_f^+S_d^- + \text{h.c.}}\rangle$", "f-PF"), (L"S_f^z", L"S_d^z"), (L"n_f", L"n_d")], ["in-plane correlation", L"$Sd.Sf$, PF", "mag.", "filling"], ("J", "Wf"), "locCorr-$(eta).pdf", L"$\eta_d = %$(eta)$")=#
 end
 
-size_BZ = 49
+size_BZ = 33
 J = 0.0:0.01:0.1
 Wf = -0.05:-0.01:-0.16
 paths = String[]
@@ -266,11 +271,11 @@ couplings = Dict("omega_by_t" => -2.,
                 )
 couplings["Ud"] = couplings["Uf"] * couplings["Wd_by_Wf"]
 couplings["μf"] = couplings["Uf"]/2
-for μd in (0.4:0.2:1.0) .* couplings["Ud"] / 2
+for μd in [0.4, 1.0] .* couplings["Ud"] / 2
 #=for μ in 0.6:0.2:1.4=#
     couplings["μd"] = μd
     #=RGFlow(couplings, Wf, J, 0:1.5:0, size_BZ; loadData=true)=#
-    path = AuxiliaryCorrelations(couplings, Wf, J, size_BZ, 611, 
+    path = AuxiliaryCorrelations(couplings, Wf, J, size_BZ, 612, 
                                  Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0");
                                  loadData=true)
     push!(paths, path)

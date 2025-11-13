@@ -199,6 +199,19 @@ end
             end
         end
     end
+    vne = Dict{String, Vector{Int64}}()
+    vne["SEE-f"] = [1, 2]
+    vne["SEE-d"] = [3, 4]
+    mutInfo = Dict{String, NTuple{2, Vector{Int64}}}()
+    mutInfo["I2-f-d"] = ([1,2], [3,4])
+    fmax = findfirst(==("f"), layerSpecs)
+    dmax = findfirst(==("d"), layerSpecs)
+    if "f" in layerSpecs
+        mutInfo["I2-f-max"] = ([1,2], [3 + 2 * fmax, 4 + 2 * fmax])
+    end
+    if "d" in layerSpecs
+        mutInfo["I2-d-max"] = ([1,2], [3 + 2 * dmax, 4 + 2 * dmax])
+    end
 
     results = IterDiag(
                       hamiltonianFamily,
@@ -207,10 +220,17 @@ end
                       magzReq=(m, N) -> -5 ≤ m ≤ 5,
                       occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,
                       correlationDefDict=corrOps,
+                      vneDefDict=vne,
+                      mutInfoDefDict=mutInfo,
                       silent=true,
                       maxMaxSize=maxSize,
                      )
     @assert results["exitCode"] == 0
+    corrResults["SEE-f"] = results["SEE-f"]
+    corrResults["SEE-d"] = results["SEE-d"]
+    corrResults["I2-f-d"] = results["I2-f-d"]
+    corrResults["I2-f-max"] = "f" in layerSpecs ? maximum([v for (k, v) in results if startswith(k, "I2-f-")]) : 0
+    corrResults["I2-d-max"] = "d" in layerSpecs ? maximum([v for (k, v) in results if startswith(k, "I2-d-")]) : 0
 
     for (name, (type, _)) in correlation
         if type == "i"
@@ -244,13 +264,11 @@ end
             corrResults[name][(p1_prime, p2_prime)] = corrResults[name][(p1, p2)]
         end
     end
-    #=println(corrResults["SF-dkk"])=#
     for (name, (type, _)) in correlation
         if type == "f" || type == "d"
             corrResults[name] = [corrResults[name][(k1, k2)] for (k1, k2) in Iterators.product(momentumPoints[type], momentumPoints[type])]
         end
     end
-    #=println(corrResults["SF-dkk"])=#
 
     return corrResults
 end

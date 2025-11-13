@@ -162,8 +162,8 @@ function RowPlots(
         ax.set_ylabel(axLabels[2])
         ax.set_title(titles[i], pad=10)
         ax.set_aspect((maximum(xlims) - minimum(xlims)) / (maximum(ylims) - minimum(ylims)))
-        fig.colorbar(hm, shrink=0.5, pad=-0.3, label=cbarLabels[i][1])
-        fig.colorbar(sc, location="left", shrink=0.5, pad=0.22, label=cbarLabels[i][2],)
+        fig.colorbar(hm, shrink=0.8, pad=-0.6, label=cbarLabels[i][1])
+        fig.colorbar(sc, location="left", shrink=0.8, pad=0.18, label=cbarLabels[i][2],)
     end
     fig.suptitle(suptitle, y=0.92)
     fig.tight_layout()
