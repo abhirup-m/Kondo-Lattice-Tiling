@@ -371,4 +371,43 @@ where \({\bf J}\) and \(\mathcal{\bf G}\) are vectors defined by the elements \(
 	\mathcal{\bf G}[q] = \rho({\bf q}) \left[\frac{1}{\omega - \frac{1}{2}\bar\epsilon_f({\bf q}) + \frac{1}{2}J_f({\bf q}) + W_f({\bf q}) - \frac{1}{4}J} + \frac{1}{\omega - \frac{1}{2}\bar\epsilon_d({\bf q}) + \frac{1}{2}J_d({\bf q}) + W_d({\bf q}) - \frac{1}{4}J}\right]~.
 \end{aligned}\end{equation}
 
+\section{Mapping Correlations from Auxiliary Model to Lattice Model}
+We follow a similar procedure as the one laid out in the earlier work. Using Bloch's theorem, the eigenstates for the tiled lattice model can be expressed as a superposition of the "local" eigenstates of the auxiliary model. Let \(\ket{\psi_\text{gs}({\bf r}_d)}\) be the groundstate of the bilayer impurity model with the \(f-\) and \(d-\)impurity sites located at \({\bf r}_d\) (only tracking the horizontal position). The low-lying eigenstates of the tiled model for the total crystal momentum \({\bf k}\) are then given by
+\begin{equation}\begin{aligned}\label{tiledState}
+	\ket{\Psi_{\bf k}} = \frac{1}{\sqrt N}\sum_{\bf r_d}e^{i {\bf k} \cdot {\bf r}_d}\ket{\psi_\text{gs}({\bf r}_d)}~.
+\end{aligned}\end{equation}
+
+We first consider intra-layer equal-time correlators, of the form
+\begin{equation}\begin{aligned}\label{intraCorrelator}
+	C_{\mathcal{O}_\alpha}(\Delta) = \braket{\Psi_{\bf k} | \mathcal{O}_\alpha({\bf r + \Delta})\mathcal{O}^\dagger_\alpha({\bf r}) | \Psi_{\bf k}}~,
+\end{aligned}\end{equation}
+where \(\alpha\) can be \(f\) or \(d\) and indicates the layer in which the correlation is being calculated (or equivalently, the layer in which the operators act).
+
+Following arguments identical to the ones laid out in the previous work, we substitute eq.~\ref{tiledState} into eq.~\ref{intraCorrelator} and use global translation operators to transfer the sum over the local eigenstates into a sum over the operators, allowing us to compute correlations within a single auxiliary model:
+\begin{equation}\begin{aligned}
+	C_{\mathcal{O}_\alpha}(\Delta) = \frac{1}{N}\sum_{{\bf r}_1, {\bf r}_2}\braket{\psi_\text{gs}({\bf r}_2 + {\bf r}_c) | \mathcal{O}_\alpha({\Delta + {\bf r}_1})\mathcal{O}^\dagger_\alpha({\bf r}_1) | \psi_\text{gs}({\bf r}_c)}e^{-i{\bf k}\cdot{\bf r}_2}~.
+\end{aligned}\end{equation}
+
+Using the treatment laid out in the previous work, we can extract an intra-auxiliary model component from the full expression (by setting \({\bf r}_2 = 0\)):
+\begin{equation}\begin{aligned}
+\frac{1}{N}\sum_{{\bf r}_1}\braket{\psi_\text{gs}({\bf r}_c) | \mathcal{\tilde O}_\alpha({\Delta + {\bf r}_1}) | \psi_\text{gs}({\bf r}_c)} \braket{\psi_\text{gs}({\bf r}_c) | \mathcal{\tilde O}^\dagger_\alpha({\bf r}_1) | \psi_\text{gs}({\bf r}_c)}~.
+\end{aligned}\end{equation}
+The modified excitation operators are generally defined as
+\begin{equation}\begin{aligned}\label{operatorTmatrix}
+	\mathcal{\tilde O}_\alpha({\bf r}) = \mathcal{O}_\alpha({\bf r})\mathcal{O}^\dagger(\alpha) \mathcal{P}_\text{gs} ~,
+\end{aligned}\end{equation}
+where \(\mathcal{O}^\dagger(d)\) is the hermitian conjugate of the correlation operator \(\mathcal{O}\), but applied on the impurity sites. This therefore constitutes a time-reversed scattering process on the impurity site relative to the process in the bath. The operator \(\mathcal{P}_\text{gs}\) projects onto the ground state of the auxiliary model, since we are interested in ground state correlations. The operator multiplying the old correlation operator represents excitation of the impurity site, and ensures that the bath and impurity excitation processes take place coherently. The projector ensures that only tripartite correlations between the impurity site and the two momentum states are captured by the correlation, which is what's desired within the tiling method.
+
+For inter-layer correlations, we have
+\begin{equation}\begin{aligned}
+	C_{\mathcal{O}}(\Delta) = \braket{\Psi_{\bf k} | \mathcal{O}_{\bar\alpha}({\bf r + \Delta})\mathcal{O}^\dagger_\alpha({\bf r}) | \Psi_{\bf k}}~,
+\end{aligned}\end{equation}
+where \(\bar\alpha\) represents the layer opposite to \(\alpha\). An identical treatment leads to the following intra-auxiliary model contribution
+\begin{equation}\begin{aligned}
+	\frac{1}{N}\sum_{{\bf r}_1}\braket{\psi_\text{gs}({\bf r}_c) | \mathcal{\tilde O}_{\bar\alpha}({\Delta + {\bf r}_1}) | \psi_\text{gs}({\bf r}_c)} \braket{\psi_\text{gs}({\bf r}_c) | \mathcal{\tilde O}^\dagger_\alpha({\bf r}_1) | \psi_\text{gs}({\bf r}_c)}~.
+\end{aligned}\end{equation}
+
+
+
+
 \end{document}
