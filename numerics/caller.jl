@@ -196,6 +196,7 @@ function AuxiliaryCorrelations(
                             "SF-fdpm" => ("i", [("+-+-", [1, 2, 4, 3], 1 / 2), ("+-+-", [2, 1, 3, 4], 1 / 2)]),
                             "SF-fdzz" => ("i", [("nn", [1, 3], 1 / 4), ("nn", [1, 4], -1 / 4), ("nn", [2, 3], -1 / 4), ("nn", [2, 4], 1 / 4)]),
                             "CF-dkk" => ("d", (i, j; factor = 1) -> [("++--", [3, 4, i+1, j], factor / 2), ("++--", [4, 3, i, j+1], factor / 2)]),
+                            "CF-fkk" => ("f", (i, j; factor = 1) -> [("++--", [1, 2, i+1, j], factor / 2), ("--++", [2, 1, i, j+1], factor / 2)]),
                             "ndu" => ("i", [("n", [3], 1.)]),
                             "ndd" => ("i", [("n", [4], 1.)]),
                             "nfu" => ("i", [("n", [1], 1.)]),
@@ -209,7 +210,9 @@ function AuxiliaryCorrelations(
                                                       insertWfJ(couplings, WfJ..., couplings["μd"]),
                                                       microCorrelation,
                                                       momentumPoints,
+                                                      Dict(),
                                                       maxSize;
+                                                      #=entanglement=String["SEE", "I2"],=#
                                                       loadData=loadData,
                                                     ),
                                          parameterSpace
@@ -224,7 +227,8 @@ function AuxiliaryCorrelations(
                         #="SF-d0" => cR -> sum(abs.(cR["SF-dkk"])) / length(momentumPoints["d"]),=#
                         "SF-d0" => cR -> -sum([abs(cR["SF-dkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs["d"])]) / length(momentumPoints["d"]),
                         "SF-fd" => cR -> -(cR["SF-fdpm"] + cR["SF-fdzz"]),
-                        "CF-d0" => cR -> sum(abs.(cR["CF-dkk"])) / length(momentumPoints["d"]),
+                        "CF-d0" => cR -> sum([abs(cR["CF-dkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs["d"])]) / length(momentumPoints["d"]),
+                        "CF-f0" => cR -> -sum([abs(cR["CF-fkk"][index]) * NNFunc(k1, k2, size_BZ) for (index, (k1, k2)) in enumerate(momentumPairs["f"])]) / length(momentumPoints["f"]),
                         "SF-fdzz" => cR -> abs(cR["SF-fdzz"]),
                         "SF-fPF" => cR -> count(>(0), abs.([cR["SF-fkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs["f"]) if k1 == k2])) / length(momentumPoints["f"]),
                         "SF-dPF" => cR -> count(>(0), abs.([cR["SF-dkk"][index] for (index, (k1, k2)) in enumerate(momentumPairs["d"]) if k1 == k2])) / length(momentumPoints["d"]),
@@ -246,7 +250,7 @@ function AuxiliaryCorrelations(
     eta = round(-couplings["μd"] + couplings["Ud"]/2, digits=3)
     return RowPlots(plottableResults,
                     collect(parameterSpace),
-                    [("SF-f0", "SF-d0"), ("SF-fd", "SF-fPF"), ("CF-d0", "nd"), ("SEE-f", "I2-f-d"), ("I2-f-max", "I2-d-max")],
+                    [("SF-f0", "SF-d0"), ("SF-fd", "SF-fPF"), ("CF-d0", "CF-f0"), ("SEE-f", "I2-f-d"), ("I2-f-max", "I2-d-max")],
                     [(L"$-\langle {S_f\cdot S_{f0}}\rangle$",L"$-\langle {S_d\cdot S_{d0}}\rangle$"), (L"$-\langle S_f\cdot S_d\rangle$", "f-PF"), (L"CF", L"n_d"), ("SEE-f", "I2-f-d"), ("I2-f-max", "I2-d-max")],
                     ["in-plane correlation", L"$Sd.Sf$, PF", "charge", "SEE", "I2"],
                     ("J", "Wf"),
@@ -254,30 +258,162 @@ function AuxiliaryCorrelations(
                     L"$\eta_d = %$(eta)$",
                     []
                    )
-    #=return RowPlots(plottableResults, collect(parameterSpace), [("SF-f0", "SF-d0"), ("SF-fdpm", "SF-fPF"), ("Sfz", "Sdz"), ("nf", "nd")], [(L"$\langle {S_f\cdot S_{f0}}\rangle$",L"$\langle {S_d\cdot S_{d0}}\rangle$"), (L"$\langle {S_f^+S_d^- + \text{h.c.}}\rangle$", "f-PF"), (L"S_f^z", L"S_d^z"), (L"n_f", L"n_d")], ["in-plane correlation", L"$Sd.Sf$, PF", "mag.", "filling"], ("J", "Wf"), "locCorr-$(eta).pdf", L"$\eta_d = %$(eta)$")=#
 end
 
-size_BZ = 33
-J = 0.0:0.01:0.1
-Wf = -0.05:-0.01:-0.16
-paths = String[]
-couplings = Dict("omega_by_t" => -2.,
-                 "Uf" => 2.,
-                 "Jf" => 0.1,
-                 "Jd" => 0.1,
-                 "J⟂" => 0.,
-                 "Wd" => -0.0,
-                 "Wd_by_Wf" => 0.5,
-                )
-couplings["Ud"] = couplings["Uf"] * couplings["Wd_by_Wf"]
-couplings["μf"] = couplings["Uf"]/2
-for μd in [0.4, 1.0] .* couplings["Ud"] / 2
-#=for μ in 0.6:0.2:1.4=#
-    couplings["μd"] = μd
-    #=RGFlow(couplings, Wf, J, 0:1.5:0, size_BZ; loadData=true)=#
-    path = AuxiliaryCorrelations(couplings, Wf, J, size_BZ, 612, 
-                                 Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0");
-                                 loadData=true)
-    push!(paths, path)
+function AuxSpecFunc(
+        couplings,
+        size_BZ,
+        maxSize;
+        loadData::Bool=false,
+    )
+    Ad_Siam = Dict("create" => [("+", [3,], 1.), ("+", [4,], 1.)],
+                  "destroy" => [("-", [4], 1.), ("-", [3,], 1.)]
+                 )
+
+    Af_Siam = Dict("create" => [("+", [1,], 1.), ("+", [2,], 1.)],
+                  "destroy" => [("-", [2,], 1.), ("-", [1,], 1.)]
+                 )
+    Afd_sym = Dict("create" => [("+-+", [1,2,4], 1.), ("+-+", [2,1,3], 1.)],
+                  "destroy" => [("+--", [2,1,4], 1.), ("+--", [1,2,3,], 1.)]
+                 )
+    Ad_Kondo(i) = Dict("create" => [("+-+", [3,4,i+1], 1.), ("+-+", [4,3,i], 1.)],
+                  "destroy" => [("+--", [4,3,i+1], 1.), ("+--", [3,4,i], 1.)]
+                 )
+
+    Af_Kondo(i) = Dict("create" => [("+-+", [1,2,i+1], 1.), ("+-+", [2,1,i], 1.)],
+                  "destroy" => [("+--", [2,1,i+1], 1.), ("+--", [1,2,i], 1.)]
+                 )
+    Afd_asym(i,j) = Dict("create" => [("+-+", [1,2,i+1], 1.), ("+-+", [2,1,i], 1.)],
+                  "destroy" => [("+--", [4,3,j+1], 1.), ("+--", [3,4,j], 1.)]
+                 )
+    specFunc = Dict(
+                    "Ad_Siam" => ("i", Ad_Siam),
+                    "Ad_Kondo" => ("d", i -> Ad_Kondo(i)),
+                    "Af_Siam" => ("i", Af_Siam),
+                    "Af_Kondo" => ("f", i -> Af_Kondo(i)),
+                    "Afd" => ("i", Afd_sym),
+                    "Afd_asym" => ("fd", (i, j) -> Afd_asym(i, j)),
+                    "ω" => collect(-8:0.001:8),
+                       )
+    specFunc["η"] = 0.05 .+ abs.(specFunc["ω"] / maximum(specFunc["ω"]))
+            
+    dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
+    momentumPoints = Dict(k => getIsoEngCont(dispersion, 0.) for k in ["f", "d"])
+    specFuncResults = AuxiliaryCorrelations(size_BZ,
+                                  couplings,
+                                  Dict(),
+                                  momentumPoints,
+                                  specFunc,
+                                  maxSize;
+                                  entanglement=String[],
+                                  loadData=loadData,
+                                 )
+
+    for k in keys(specFunc)
+        if k == "ω" || k == "η"
+            continue
+        end
+        specFunc_k = 0 .* specFunc["ω"] 
+        for r in specFuncResults[k]
+            A_r = SpecFunc(r, specFunc["ω"], specFunc["η"]; normalise=false)
+            norm = sum(A_r) * (specFunc["ω"][2] - specFunc["ω"][1])
+            if maximum(A_r) > 1e-2
+                A_r /= norm
+            end
+            specFunc_k .+= A_r
+        end
+        norm = sum(specFunc_k) * (specFunc["ω"][2] - specFunc["ω"][1])
+        if maximum(specFunc_k) > 1e-2
+            specFunc_k /= norm
+        end
+        specFuncResults[k] = specFunc_k
+    end
+
+    specFuncResults["Ad"] = (2/3) * (specFuncResults["Ad_Siam"] + 0.5 * specFuncResults["Ad_Kondo"])
+    specFuncResults["Af"] = (2/3) * (specFuncResults["Af_Siam"] + 0.5 * specFuncResults["Af_Kondo"])
+
+    return specFuncResults, specFunc["ω"]
 end
-merge_pdfs(paths, "locCorr.pdf", cleanup=true)
+
+#=begin=#
+#=    size_BZ = 33=#
+#=    J = 0.0:0.01:0.0=#
+#=    Wf = -0.05:-0.01:-0.05=#
+#=    paths = String[]=#
+#=    couplings = Dict("omega_by_t" => -2.,=#
+#=                     "Uf" => 2.,=#
+#=                     "Jf" => 0.1,=#
+#=                     "Jd" => 0.2,=#
+#=                     "J⟂" => 0.,=#
+#=                     "Wd" => -0.0,=#
+#=                     "Wd_by_Wf" => 0.5,=#
+#=                    )=#
+#=    couplings["Ud"] = couplings["Uf"] * couplings["Wd_by_Wf"]=#
+#=    couplings["μf"] = couplings["Uf"]/2=#
+#=    for μd in [0.4, 1.0] .* couplings["Ud"] / 2=#
+#=        couplings["μd"] = μd=#
+#=        path = AuxiliaryCorrelations(couplings, Wf, J, size_BZ, 813, =#
+#=                                     Dict("SF-f0"=>"SF-f0", "SF-d0"=>"SF-d0");=#
+#=                                     loadData=false)=#
+#=        push!(paths, path)=#
+#=    end=#
+#=    merge_pdfs(paths, "locCorr.pdf", cleanup=true)=#
+#=end=#
+
+begin
+    size_BZ = 33
+    Wf_vals = [-0., -0.1, -0.15,]
+    Jp_vals = [0., 0.05, 0.1]
+    #=Wf_vals = [-0.2,]=#
+    #=Jp_vals = [0.1]=#
+    fig1, ax1 = plt.subplots(ncols=length(Jp_vals), nrows=length(Wf_vals), figsize=(8 * length(Jp_vals), 6 * length(Wf_vals)))
+    fig2, ax2 = plt.subplots(ncols=length(Jp_vals), nrows=length(Wf_vals), figsize=(8 * length(Jp_vals), 6 * length(Wf_vals)))
+    fig3, ax3 = plt.subplots(ncols=length(Jp_vals), nrows=length(Wf_vals), figsize=(8 * length(Jp_vals), 6 * length(Wf_vals)))
+    counter = 1
+    couplings = Dict("omega_by_t" => -2.,
+                     "Uf" => 4.,
+                     "Jf" => 0.1,
+                     "Wd_by_Wf" => 0.5,
+                    )
+    couplings["Ud"] = couplings["Uf"] * couplings["Wd_by_Wf"]
+    couplings["μf"] = couplings["Uf"]/2
+    couplings["Jd"] = couplings["Jf"] #/ couplings["Wd_by_Wf"] 
+    for (Wf, Jp) in Iterators.product(Wf_vals, Jp_vals)
+        couplings["J⟂"] = Jp
+        couplings["Wf"] = Wf
+        couplings["Wd"] = 0 * couplings["Wf"] * couplings["Wd_by_Wf"]
+        μdValues = [1.0, 0.6, 1.4] .* couplings["Ud"] / 2
+        axs = Dict(k => length(Wf_vals) * length(Jp_vals) > 1 ? ax[counter] : ax for (k, ax) in zip(["Ad", "Af", "Afd"], [ax1, ax2, ax3]))
+        ins = Dict(k => axv.inset_axes([0.55,0.5,0.45,0.4]) for (k, axv) in axs)
+        for (i, μd) in enumerate(μdValues)
+            couplings["μd"] = μd
+            results, ω = AuxSpecFunc(couplings,
+                        size_BZ,
+                        1537;
+                        loadData=true,
+                       )
+            for (k, axv) in axs
+                axv.plot(ω[abs.(ω) .< 4], results[k][abs.(ω) .< 4], label=L"η_d=%$(-μd + couplings[\"Ud\"]/2)")
+                ins[k].plot(ω[abs.(ω) .< 1.5], results[k][abs.(ω) .< 1.5], label=L"η_d=%$(-μd + couplings[\"Ud\"]/2)")
+                ins[k].set_yticks([])
+            end
+        end
+        for k in ["Ad", "Af", "Afd"]
+            axs[k].legend(loc="center left")
+            axs[k].text(0.05, 0.95,
+                             L"""
+                             $J_d=%$(couplings[\"Jd\"])$
+                             $J_f=%$(couplings[\"Jf\"])$
+                             $J_⟂=%$(Jp)$
+                             $W_f=%$(Wf)$
+                             $W_d=%$(couplings["Wd"])$
+                             """,
+                             horizontalalignment="left", verticalalignment="top", transform=axs[k].transAxes)
+        end
+        global counter += 1
+    end
+    fig1.savefig("specFunc_Ad.pdf", bbox_inches="tight")
+    fig2.savefig("specFunc_Af.pdf", bbox_inches="tight")
+    fig3.savefig("specFunc_Afd.pdf", bbox_inches="tight")
+    plt.close()
+end

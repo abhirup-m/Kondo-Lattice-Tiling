@@ -79,7 +79,9 @@ end
         size_BZ::Int64,
         maxSize::Int64,
         momentumPoints::Dict{String, Vector{Int64}},
-        correlation::Dict;
+        correlation::Dict,
+        specFunc::Dict;
+        entanglement::Vector{String}=String[],
         addPerStep::Int64=1,
         tolerance=1e-10,
     )
@@ -91,12 +93,6 @@ end
     for k in ["f", "d"]
         truncatedPoints[k] = filter(p -> map1DTo2D(p, size_BZ)[2] ≥ 0, momentumPoints[k])
     end
-    #=for signs in Iterators.product([1, -1], [1, -1])=#
-    #=    quadrantPoints = filter(p -> all(sign.(map1DTo2D(p, size_BZ)) .== signs), momentumPoints["d"])=#
-    #=    distances = abs.([diff(map1DTo2D(p, size_BZ).^2)[1] for p in quadrantPoints])=#
-    #=    push!(truncatedPoints["d"], quadrantPoints[argmin(distances)])=#
-    #=    push!(truncatedPoints["d"], quadrantPoints[argmax(distances)])=#
-    #=end=#
 
     totalSize = sum(length.(values(truncatedPoints)))
 
@@ -134,6 +130,11 @@ end
 
     sortseq = sortperm(diag(stargraph), rev=true)
     filter!(i -> abs(stargraph[i, i]) > tolerance, sortseq)
+    for k in ["f", "d"]
+        if k ∉ layerSpecs[sortseq]
+            push!(sortseq, findfirst(==(k), layerSpecs))
+        end
+    end
     stargraph = stargraph[sortseq, sortseq]
     layerSpecs = layerSpecs[sortseq]
     hybrid = hybrid[sortseq]
@@ -200,37 +201,88 @@ end
         end
     end
     vne = Dict{String, Vector{Int64}}()
-    vne["SEE-f"] = [1, 2]
-    vne["SEE-d"] = [3, 4]
     mutInfo = Dict{String, NTuple{2, Vector{Int64}}}()
-    mutInfo["I2-f-d"] = ([1,2], [3,4])
-    fmax = findfirst(==("f"), layerSpecs)
-    dmax = findfirst(==("d"), layerSpecs)
-    if "f" in layerSpecs
-        mutInfo["I2-f-max"] = ([1,2], [3 + 2 * fmax, 4 + 2 * fmax])
-    end
-    if "d" in layerSpecs
-        mutInfo["I2-d-max"] = ([1,2], [3 + 2 * dmax, 4 + 2 * dmax])
+    for measure in entanglement
+        if measure == "SEE"
+            vne["SEE-f"] = [1, 2]
+            vne["SEE-d"] = [3, 4]
+        end
+        if measure == "I2"
+            mutInfo["I2-f-d"] = ([1,2], [3,4])
+            fmax = findfirst(==("f"), layerSpecs)
+            dmax = findfirst(==("d"), layerSpecs)
+            if "f" in layerSpecs
+                mutInfo["I2-f-max"] = ([1,2], [3 + 2 * fmax, 4 + 2 * fmax])
+            end
+            if "d" in layerSpecs
+                mutInfo["I2-d-max"] = ([3,4], [3 + 2 * dmax, 4 + 2 * dmax])
+            end
+        end
     end
 
+    specFuncDefDict = Dict{String, Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}}()
+    fd_inds = Dict(k => findall(==(k), layerSpecs) for k in ["f", "d"])
+    for (k, v) in specFunc
+        if k ≠ "ω" && k ≠ "η"
+            specFuncDefDict[k] = Dict()
+            type, func = v
+            if type == "i"
+                specFuncDefDict[k] = func
+            end
+            if type == "f" || type == "d"
+                for isDagger in ["create", "destroy"]
+                    specFuncDefDict[k][isDagger] = vcat(unique([func(3 + 2 * i)[isDagger] for i in fd_inds[type]])...)
+                end
+            end
+            if type == "fd"
+                for isDagger in ["create", "destroy"]
+                    specFuncDefDict[k][isDagger] = vcat(unique([func(3 + 2 * i, 3 + 2 * j)[isDagger] for (i, j) in Iterators.product(fd_inds["f"], fd_inds["d"])])...)
+                end
+            end
+        end
+    end
     results = IterDiag(
                       hamiltonianFamily,
                       maxSize;
                       symmetries=Char['N', 'S'],
-                      magzReq=(m, N) -> -5 ≤ m ≤ 5,
-                      occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,
+                      #=magzReq=(m, N) -> -5 ≤ m ≤ 5,=#
+                      #=occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,=#
                       correlationDefDict=corrOps,
                       vneDefDict=vne,
                       mutInfoDefDict=mutInfo,
-                      silent=true,
+                      specFuncDefDict=specFuncDefDict,
+                      #=excludeLevels=E -> abs(E) > 1.0,=#
+                      silent=false,
                       maxMaxSize=maxSize,
                      )
+    for k in keys(specFuncDefDict)
+        corrResults[k] = results[k]
+    end
+    #=for k in keys(specFuncDefDict)=#
+    #=    corrResults[k] = 0 .* specFunc["ω"] =#
+    #=    for r in results[k]=#
+    #=        A_r = SpecFunc(r, specFunc["ω"], specFunc["η"]; normalise=false)=#
+    #=        norm = sum(A_r) * (specFunc["ω"][2] - specFunc["ω"][1])=#
+    #=        if maximum(A_r) > 1e-2=#
+    #=            A_r /= norm=#
+    #=        end=#
+    #=        corrResults[k] .+= A_r=#
+    #=    end=#
+    #=    norm = sum(corrResults[k]) * (specFunc["ω"][2] - specFunc["ω"][1])=#
+    #=    if maximum(corrResults[k]) > 1e-2=#
+    #=        corrResults[k] /= norm=#
+    #=    end=#
+    #=end=#
     @assert results["exitCode"] == 0
-    corrResults["SEE-f"] = results["SEE-f"]
-    corrResults["SEE-d"] = results["SEE-d"]
-    corrResults["I2-f-d"] = results["I2-f-d"]
-    corrResults["I2-f-max"] = "f" in layerSpecs ? maximum([v for (k, v) in results if startswith(k, "I2-f-")]) : 0
-    corrResults["I2-d-max"] = "d" in layerSpecs ? maximum([v for (k, v) in results if startswith(k, "I2-d-")]) : 0
+    if "SEE" in entanglement
+        corrResults["SEE-f"] = results["SEE-f"]
+        corrResults["SEE-d"] = results["SEE-d"]
+    end
+    if "I2" in entanglement
+        corrResults["I2-f-d"] = results["I2-f-d"]
+        corrResults["I2-f-max"] = "f" in layerSpecs ? maximum([v for (k, v) in results if startswith(k, "I2-f-")]) : 0
+        corrResults["I2-d-max"] = "d" in layerSpecs ? maximum([v for (k, v) in results if startswith(k, "I2-d-")]) : 0
+    end
 
     for (name, (type, _)) in correlation
         if type == "i"
@@ -463,7 +515,9 @@ end
         bareCouplings::Dict{String, Float64},
         correlation::Dict,
         momentumPoints::Dict{String, Vector{Int64}},
+        specFunc::Dict,
         maxSize::Int64;
+        entanglement::Vector{String}=String[],
         loadData::Bool=false,
         saveData::Bool=true,
     )
@@ -488,10 +542,6 @@ end
     end
 
     couplings = momentumSpaceRG(size_BZ, bareCouplings; loadData=false, saveData=false)
-    #=if bareCouplings["Wf"] == 0 && bareCouplings["J⟂"] == 0=#
-    #=    FSpoints = getIsoEngCont(dispersion, 0.0)=#
-    #=    println(sort(vec(round.(couplings["d"][FSpoints, FSpoints], digits=4))) .- sort(vec(round.(couplings["f"][FSpoints, FSpoints], digits=4))))=#
-    #=end=#
 
     for k in ["f", "d"]
         averageKondoScale = bareCouplings["J$k"] / 2
@@ -501,27 +551,20 @@ end
     couplings["μ"] = Dict(k => bareCouplings["μ$k"] for k in ["f", "d"])
     couplings["impCorr"] = Dict(k => bareCouplings["U$k"] for k in ["f", "d"])
 
-    #=if abs(bareCouplings["μ"]) < 4 * HOP_T=#
-    #=    couplings["μ"] = 0.=#
-    #=elseif bareCouplings["μ"] > 4 * HOP_T=#
-    #=    couplings["μ"] -= 4 * HOP_T=#
-    #=else=#
-    #=    couplings["μ"] += 4 * HOP_T=#
-    #=end=#
-
     results = IterDiagMomentumSpace(
                                     couplings,
                                     size_BZ,
                                     maxSize,
                                     momentumPoints,
-                                    correlation;
+                                    correlation,
+                                    specFunc;
+                                    entanglement=entanglement,
                                     addPerStep=1,
                                    )
     merge!(availableResults, results)
     if saveData
         save(saveJLD, availableResults)
     end
-
     return availableResults
 end
 
