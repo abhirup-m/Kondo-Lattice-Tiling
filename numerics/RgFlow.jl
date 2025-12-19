@@ -110,9 +110,7 @@ end
 
     GMatrix = Dict(k => 0 .* couplings[k] for k in ["f", "d"])
     WMatrix = 0.5 .* (cos.(kxVals' .- kxVals) .+ cos.(kyVals' .- kyVals))
-    node = map2DTo1D(π/2, π/2, size_BZ)
     for (stepIndex, energyCutoff) in enumerate(cutOffEnergies[1:end-1])
-        #=println(couplings["d"][node, node], node)=#
         deltaEnergy = abs(cutOffEnergies[stepIndex+1] - cutOffEnergies[stepIndex])
 
         # if there are no enabled flags (i.e., all are zero), stop the RG flow

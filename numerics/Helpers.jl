@@ -398,13 +398,15 @@ end
 
 
 function ExtendedSaveName(
-        couplings::Dict{String, Vector{Float64}},
+        couplings::Dict{String, Any},
     )
-    couplingNames = ["epsilonF", "W", "Wf", "kondoPerp", "kondoF", "lightBandFactor", "mu_c"]
+    couplingNames = ["Uf", "Ud", "Wd", "Wf", "Jd", "Jf", "J⟂", "μd", "μf"]
     components = []
     for name in couplingNames
-        if length(couplings[name]) == 3
-            push!(components, join(couplings[name], "-"))
+        if length(couplings[name]) > 1
+            start, stop = [couplings[name][1], couplings[name][end]]
+            step = couplings[name][2] - couplings[name][1]
+            push!(components, "$(start)-$(step)-$(stop)")
         else
             push!(components, join((couplings[name][1], 0., couplings[name][1]), "-"))
         end

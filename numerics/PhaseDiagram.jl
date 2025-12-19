@@ -176,16 +176,17 @@ end
         couplings::Dict{String, Float64};
         loadData::Bool=false,
     )
-    kondoJArray, kondoPerpArray, dispersion = momentumSpaceRG(size_BZ, couplings; saveData=true, loadData=false)
+    kondoJArray = momentumSpaceRG(size_BZ, couplings; saveData=true, loadData=false)
+    dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
     fermiPoints = unique(getIsoEngCont(dispersion, 0.0))
     @assert length(fermiPoints) == 2 * size_BZ - 2
     @assert all(==(0), dispersion[fermiPoints])
-    averageKondoScale = sum(abs.(kondoJArray[:, :, 1])) / length(kondoJArray[:, :, 1])
+    averageKondoScale = couplings["Jd"] / 2
     @assert averageKondoScale > RG_RELEVANCE_TOL
-    kondoJArray[:, :, end] .= ifelse.(abs.(kondoJArray[:, :, end]) ./ averageKondoScale .> RG_RELEVANCE_TOL, kondoJArray[:, :, end], 0)
-    scattProbBool = ScattProb(size_BZ, kondoJArray, dispersion)[2]
+    kondoJArray["f"] .= ifelse.(abs.(kondoJArray["f"]) ./ averageKondoScale .> RG_RELEVANCE_TOL, kondoJArray["f"], 0)
+    scattProbBool = ScattProb(size_BZ, kondoJArray["f"], dispersion)[2]
     polesFraction = count(>(0),scattProbBool[fermiPoints]) / length(fermiPoints)
-    return Dict("Jf-max" => maximum(abs.(kondoJArray[fermiPoints, fermiPoints, end])), "J" => kondoPerpArray[end], "f-pf" => polesFraction)
+    return Dict("Jf-max" => maximum(abs.(kondoJArray["f"][fermiPoints, fermiPoints, end])), "J" => kondoPerpArray[end], "f-pf" => polesFraction)
 end
 
 function PhaseDiagram(
