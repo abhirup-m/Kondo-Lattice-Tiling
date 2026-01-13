@@ -330,7 +330,7 @@ function SavePath(
     end
     path = "$(prefix)_$(size_BZ)"
 
-    coupNames = ["omega_by_t", "Jf", "Jd", "J⟂", "Wf", "Wd", "μf", "μd"]
+    coupNames = ["omega_by_t", "Jf", "Jd", "J⟂", "Wf", "Wd", "ηf", "ηd"]
     for k in coupNames
         path *= "_$(couplings[k])"
     end
@@ -452,4 +452,13 @@ function Nest(k, size_BZ)
         kx_prime, ky_prime = (kx, ky) .- (-π, π)
     end
     return map2DTo1D(kx_prime, ky_prime, size_BZ)
+end
+
+
+function Normalise(specFunc, ω; tolerance=1e-4)
+    if maximum(specFunc) > tolerance
+        norm = abs(sum(specFunc) * (ω[2] - ω[1]))
+        specFunc /= norm
+    end
+    return specFunc
 end

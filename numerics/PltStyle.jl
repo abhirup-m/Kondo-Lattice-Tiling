@@ -139,7 +139,7 @@ function RowPlots(
     sparseX = last.(parameters[1, maximum((1, div(size(parameters)[2], 10))):end])
     sparseY = first.(parameters[maximum((1, div(size(parameters)[1], 10))):end, 1])
 
-    fig, axes = subplots(ncols=length(heatmaps), figsize=(6 * length(heatmaps), 3.5))
+    fig, axes = subplots(ncols=length(heatmaps), figsize=(6.5 * length(heatmaps), 3.5))
     fig.tight_layout()
     for (i, (hmKey, scKey)) in enumerate(heatmaps)
         ax = length(heatmaps) > 1 ? axes[i] : axes
@@ -162,8 +162,8 @@ function RowPlots(
         ax.set_ylabel(axLabels[2])
         ax.set_title(titles[i], pad=10)
         ax.set_aspect((maximum(xlims) - minimum(xlims)) / (maximum(ylims) - minimum(ylims)))
-        fig.colorbar(hm, shrink=0.8, pad=-0.6, label=cbarLabels[i][1])
-        fig.colorbar(sc, location="left", shrink=0.8, pad=0.18, label=cbarLabels[i][2],)
+        fig.colorbar(hm, shrink=0.8, pad=-0.8, label=cbarLabels[i][1])
+        fig.colorbar(sc, location="left", shrink=0.8, pad=0.13, label=cbarLabels[i][2],)
     end
     fig.suptitle(suptitle, y=0.92)
     fig.tight_layout()

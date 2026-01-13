@@ -335,7 +335,7 @@ function BilayerLEE(
         J::Matrix{Float64},
         Jp::Float64,
         hybrid::Vector{Float64},
-        μ::Dict{String, Float64},
+        η::Dict{String, Float64},
         impCorr::Dict{String, Float64},
         layerSpecs::Vector{String};
         globalField::Number=0,
@@ -409,17 +409,21 @@ function BilayerLEE(
     end
 
     for (site, k) in zip([1, 3], ["f", "d"])
-        if abs(μ[k]) > couplingTolerance
-            push!(hamiltonian, ("n",  [site], -μ[k]))
-            push!(hamiltonian, ("n",  [site + 1], -μ[k]))
+        if abs(η[k]) > couplingTolerance
+            push!(hamiltonian, ("n",  [site], -η[k]))
+            push!(hamiltonian, ("n",  [site + 1], -η[k]))
         end
     end
 
     if abs(impCorr["f"]) > couplingTolerance
         push!(hamiltonian, ("nn",  [1, 2], impCorr["f"]))
+        push!(hamiltonian, ("n",  [1], -0.5 * impCorr["f"]))
+        push!(hamiltonian, ("n",  [2], -0.5 * impCorr["f"]))
     end
     if abs(impCorr["d"]) > couplingTolerance
         push!(hamiltonian, ("nn",  [3, 4], impCorr["d"]))
+        push!(hamiltonian, ("n",  [3], -0.5 * impCorr["d"]))
+        push!(hamiltonian, ("n",  [4], -0.5 * impCorr["d"]))
     end
 
     # global magnetic field (to lift any trivial degeneracy)
@@ -437,3 +441,4 @@ function BilayerLEE(
 
     return hamiltonian
 end
+

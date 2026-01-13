@@ -79,19 +79,22 @@ end
         size_BZ::Int64,
         maxSize::Int64,
         momentumPoints::Dict{String, Vector{Int64}},
+        typesOrder::Vector{String},
         specFunc::Dict;
         addPerStep::Int64=1,
         tolerance=-Inf,
     )
 
+    t1, t2 = typesOrder
     # only momentum points with ky ≥ 0 need to be
     # solved for, the rest can be mapped exactly
     truncatedPoints = Dict()
     for k in ["f", "d"]
+        #=truncatedPoints[k] = filter(p -> true, momentumPoints[k])=#
         truncatedPoints[k] = filter(p -> map1DTo2D(p, size_BZ)[2] ≥ 0, momentumPoints[k])
     end
 
-    totalSize = sum(length.(values(truncatedPoints)))
+    totalSize = length(truncatedPoints["f"]) + 1
 
     # define Kondo matrix just for the upper half, for both layers
     J = zeros(totalSize, totalSize)
@@ -99,40 +102,50 @@ end
     # this stores the information of which indices in J
     # store couplings from which layer. Since the first N
     # indices are f, we set them true, the last N is set to false.
-    layerSpecs = String[]
+    layerSpecs = repeat([t1], totalSize-1)
+    push!(layerSpecs, t2)
 
     # the first NxN points store the d-Kondo couplings,
     # while the last NxN store the f-couplings. This means
     # that d-correlations must be calculated from the 
     # upper half, while f-correlations come from lower half.
-    typesOrder = ["f", "d"]
-    hybrid = vcat([hamiltDetails["V"][t] for t in typesOrder]...)
+    hybrid = hamiltDetails["V"][t1][truncatedPoints[t1]]
+    push!(hybrid, (sum(hamiltDetails["V"][t2].^2)^0.5) / length(hamiltDetails["V"][t2]))
+    indices = 1:length(truncatedPoints[t1])
+    J[end, end] = (sum(diag(hamiltDetails[t2][truncatedPoints[t2], truncatedPoints[t2]]).^2)^0.5) / length(truncatedPoints[t2])
 
     momentumMapping = Dict()
-    for (i, k) in enumerate(typesOrder)
-        if k == "f"
-            indices = 1:length(truncatedPoints["f"])
-        else
-            indices = length(truncatedPoints["f"]) .+ (1:length(truncatedPoints["d"]))
-        end
-        momentumMapping[k] = Dict(zip(truncatedPoints[k], indices))
-        J[indices, indices] = hamiltDetails[k][truncatedPoints[k], truncatedPoints[k]]
-        append!(layerSpecs, repeat([k], length(truncatedPoints[k])))
-        #=hybrid[indices] = abs.(hamiltDetails["impCorr"][k] .* diag(J[indices, indices])).^0.5=#
-        #=if k == "d"=#
-            #=hybrid[indices] = hamiltDetails["impCorr"][k] .* [sum(Ji.^2)^0.5 / length(indices) for Ji in eachcol(J[indices, indices])]=#
-            #=hybrid[indices] = abs.(hamiltDetails["impCorr"][k] .* diag(J[indices, indices])).^0.5=#
-        #=end=#
-    end
+    momentumMapping[t1] = Dict(zip(truncatedPoints[t1], indices))
+    momentumMapping[t2] = Dict(map2DTo1D(π/2, π/2, size_BZ) => 1)
+    J[indices, indices] = hamiltDetails[t1][truncatedPoints[t1], truncatedPoints[t1]]
 
-    #=sortseq = sortperm(abs.(diag(J)), rev=true)=#
-    sortseq = sortperm([sum(Ji.^2) for Ji in eachcol(J)], rev=true)
-    J = J[sortseq, sortseq]
-    layerSpecs = layerSpecs[sortseq]
-    hybrid = hybrid[sortseq]
-    for (k, m) in momentumMapping
-        momentumMapping[k] = Dict(p => findfirst(==(i), sortseq) for (p, i) in m)
-    end
+    sortseq = sortperm([sum(Ji.^2) for Ji in eachcol(J[indices,indices])], rev=true)
+    J[indices,indices] = J[indices,indices][sortseq, sortseq]
+    layerSpecs[indices] = layerSpecs[indices][sortseq]
+    hybrid[indices] = hybrid[indices][sortseq]
+    momentumMapping[t1] = Dict(p => findfirst(==(i), sortseq) for (p, i) in momentumMapping[t1])
+
+    #=channel1 = findall(p -> prod(map1DTo2D(p, size_BZ)) ≥ 0, truncatedPoints[t1])=#
+    #=channel2 = findall(p -> prod(map1DTo2D(p, size_BZ)) < 0, truncatedPoints[t1])=#
+    #=J_channel = 0 .* J[indices, indices]=#
+    #=hybrid_channel = 0 .* hybrid[indices]=#
+    #=sortseq = collect(1:length(indices))=#
+    #=println(channel1, channel2)=#
+    #=for channel in [channel1, channel2]=#
+    #=    kxVals = first.(map1DTo2D.(truncatedPoints[t1][channel], size_BZ))=#
+    #=    kyVals = last.(map1DTo2D.(truncatedPoints[t1][channel], size_BZ))=#
+    #=    xVals = -div(length(channel), 2):div(length(channel)-1, 2)=#
+    #=    fourierPhase = exp.(1im .* xVals .* kxVals')=#
+    #=    J_channel[channel, channel] .= real.(fourierPhase * J[channel, channel] * fourierPhase') ./ length(channel)=#
+    #=    hybrid_channel[channel] .= 0 * real.(fourierPhase * hybrid[channel])=#
+    #=    sortseq[channel] = sortperm([Ji^2 for Ji in diag(J_channel[channel, channel])], rev=true)=#
+    #=    J_channel[channel, channel] = J_channel[channel, channel][sortseq[channel], sortseq[channel]]=#
+    #=    layerSpecs[channel] = layerSpecs[channel][sortseq[channel]]=#
+    #=    hybrid_channel[channel] = hybrid[channel][sortseq[channel]]=#
+    #=end=#
+    #=J[indices, indices] .= J_channel=#
+    #=hybrid[indices] .= hybrid_channel=#
+
 
     # obtain Hamiltonian with sorted Kondo matrix
     hamiltonian = BilayerLEE(
@@ -149,10 +162,8 @@ end
     # The first chunk has 10 qubits, then we subsequently keep
     # adding 2 qubits (k↑, k↓) every iteration.
     indexPartitions = [10]
-    i = 3
-    while i < length(layerSpecs)
+    while indexPartitions[end] < 2 * (2 + length(layerSpecs))
         push!(indexPartitions, indexPartitions[end] + 2)
-        i += 1
     end
     hamiltonianFamily = MinceHamiltonian(hamiltonian, indexPartitions)
     @assert all(!isempty, hamiltonianFamily)
@@ -166,29 +177,37 @@ end
         if k == "ω" || k == "η"
             continue
         end
-        specFuncDefDict[k] = Dict()
         type = v[1]
-        if type == "i"
+        if (type == "if" || type =="id") && type[2:2] == t1
+            specFuncDefDict[k] = Dict()
             specFuncDefDict[k]["create"] = v[2]
         end
-        if type == "f" || type == "d"
+        if (type == "f" || type == "d") && type == t1
+            specFuncDefDict[k] = Dict()
             func = v[2]
             specFuncDefDict[k]["create"] = vcat(unique([func(3 + 2 * i) for i in fd_inds[type]])...)
         end
         if type == "fd"
+            specFuncDefDict[k] = Dict()
             func = v[2]
             specFuncDefDict[k]["create"] = vcat(unique([func(3 + 2 * i, 3 + 2 * j) for (i, j) in Iterators.product(fd_inds["f"], fd_inds["d"])])...)
         end
-        if type == "bond"
+        if type == "+-"
+            specFuncDefDict[k] = Dict()
             condition, func = v[2:3]
             specFuncDefDict[k]["create"] = []
-            for p in filter(condition, truncatedPoints["f"])
-                i_d = momentumMapping["d"][p]
-                i_f = momentumMapping["f"][p]
-                append!(specFuncDefDict[k]["create"], func(3 + 2 * i_d, 3 + 2 * i_f))
+            mom = Dict(t2 => 3 + 2 * findfirst(==(t2), layerSpecs))
+            kondoAvg = Dict()
+            kondoAvg[t2] = maximum((1e-3, sum(abs.(hamiltDetails[t2][truncatedPoints[t2], truncatedPoints[t2]])) / length(truncatedPoints[t2])^2))
+            for p in filter(condition, truncatedPoints[t1])
+                mom[t1] = 3 + 2 * momentumMapping[t1][p]
+                kondoAvg[t1] = maximum((1e-3, sum(abs.(hamiltDetails[t2][p, truncatedPoints[t1]])) / length(truncatedPoints[t2])))
+                append!(specFuncDefDict[k]["create"], func(mom, kondoAvg))
             end
         end
-        specFuncDefDict[k]["destroy"] = Dagger(copy(specFuncDefDict[k]["create"]))
+        if haskey(specFuncDefDict, k)
+            specFuncDefDict[k]["destroy"] = Dagger(copy(specFuncDefDict[k]["create"]))
+        end
     end
     results = IterDiag(
                       hamiltonianFamily,
@@ -201,7 +220,9 @@ end
                       silent=false,
                       maxMaxSize=maxSize,
                      )
-    corrResults = Dict()
+
+    @assert results["exitCode"] == 0
+
     for k in keys(specFuncDefDict)
         corrResults[k] = results[k]
     end
@@ -213,9 +234,9 @@ end
         hamiltDetails::Dict,
         size_BZ::Int64,
         maxSize::Int64,
-        momentumPoints::Dict{String, Vector{Int64}};
-        correlation::Dict=Dict(),
-        entanglement::Vector{String}=String[],
+        momentumPoints::Dict{String, Vector{Int64}},
+        correlation::Dict,
+        entanglement::Dict;
         addPerStep::Int64=1,
         tolerance=-Inf,
     )
@@ -232,7 +253,7 @@ end
     # define Kondo matrix just for the upper half, for both layers
     J = zeros(totalSize, totalSize)
     hybrid = zeros(totalSize)
-    
+
     # this stores the information of which indices in J
     # store couplings from which layer. Since the first N
     # indices are f, we set them true, the last N is set to false.
@@ -248,15 +269,16 @@ end
     stargraph = 0 .* J
     unitary = 0 .* J
 
-    momentumMapping = Dict()
     for (i, k) in enumerate(typesOrder)
         if k == "f"
             indices = 1:length(truncatedPoints["f"])
         else
             indices = length(truncatedPoints["f"]) .+ (1:length(truncatedPoints["d"]))
         end
-        momentumMapping[k] = Dict(zip(truncatedPoints[k], indices))
         J[indices, indices] = hamiltDetails[k][truncatedPoints[k], truncatedPoints[k]]
+        #=if k == "f" && all(==(0), J[indices, indices])=#
+        #=    J[1, 1] = HOP_T^2 / hamiltDetails["impCorr"]["f"]=#
+        #=end=#
         append!(layerSpecs, repeat([k], length(truncatedPoints[k])))
         stargraph[diagind(stargraph)[indices]], unitary[indices, indices] = eigen(Hermitian(J[indices, indices]))
         if k == "d"
@@ -274,16 +296,13 @@ end
     stargraph = stargraph[sortseq, sortseq]
     layerSpecs = layerSpecs[sortseq]
     hybrid = hybrid[sortseq]
-    for (k, m) in momentumMapping
-        momentumMapping[k] = Dict(p => findfirst(==(i), sortseq) for (p, i) in m)
-    end
 
     # obtain Hamiltonian with sorted Kondo matrix
     hamiltonian = BilayerLEE(
                              stargraph,
                              hamiltDetails["⟂"],
                              hybrid,
-                             hamiltDetails["μ"],
+                             hamiltDetails["η"],
                              hamiltDetails["impCorr"],
                              layerSpecs;
                              globalField=1e-8,
@@ -341,21 +360,15 @@ end
     end
     vne = Dict{String, Vector{Int64}}()
     mutInfo = Dict{String, NTuple{2, Vector{Int64}}}()
-    for measure in entanglement
-        if measure == "SEE"
-            vne["SEE-f"] = [1, 2]
-            vne["SEE-d"] = [3, 4]
-        end
-        if measure == "I2"
-            mutInfo["I2-f-d"] = ([1,2], [3,4])
+    for (k, v) in entanglement
+        if typeof(v) == Vector{Int64}
+            vne[k] = v
+        elseif typeof(v) == Tuple{Vector{Int64}, Vector{Int64}}
+            mutInfo[k] = v
+        else
             fmax = findfirst(==("f"), layerSpecs)
             dmax = findfirst(==("d"), layerSpecs)
-            if "f" in layerSpecs
-                mutInfo["I2-f-max"] = ([1,2], [3 + 2 * fmax, 4 + 2 * fmax])
-            end
-            if "d" in layerSpecs
-                mutInfo["I2-d-max"] = ([3,4], [3 + 2 * dmax, 4 + 2 * dmax])
-            end
+            mutInfo[k] = v(3 + 2 * fmax, 3 + 2 * dmax)
         end
     end
 
@@ -373,14 +386,8 @@ end
                       maxMaxSize=maxSize,
                      )
     @assert results["exitCode"] == 0
-    if "SEE" in entanglement
-        corrResults["SEE-f"] = results["SEE-f"]
-        corrResults["SEE-d"] = results["SEE-d"]
-    end
-    if "I2" in entanglement
-        corrResults["I2-f-d"] = results["I2-f-d"]
-        corrResults["I2-f-max"] = "f" in layerSpecs ? maximum([v for (k, v) in results if startswith(k, "I2-f-")]) : 0
-        corrResults["I2-d-max"] = "d" in layerSpecs ? maximum([v for (k, v) in results if startswith(k, "I2-d-")]) : 0
+    for k in keys(entanglement)
+        corrResults[k] = results[k]
     end
 
     for (name, (type, _)) in correlation
@@ -614,9 +621,9 @@ end
         bareCouplings::Dict{String, Float64},
         correlation::Dict,
         momentumPoints::Dict{String, Vector{Int64}},
+        entanglement::Dict,
         specFunc::Dict,
         maxSize::Int64;
-        entanglement::Vector{String}=String[],
         loadData::Bool=false,
         saveData::Bool=true,
     )
@@ -627,7 +634,7 @@ end
     allReqKeys = []
     append!(allReqKeys, keys(correlation))
     append!(allReqKeys, filter(k -> k ≠ "ω" && k ≠ "η", keys(specFunc)))
-    append!(allReqKeys, entanglement)
+    append!(allReqKeys, keys(entanglement))
 
     couplings = momentumSpaceRG(size_BZ, bareCouplings; loadData=false, saveData=false)
     for k in ["f", "d"]
@@ -635,18 +642,18 @@ end
         @assert averageKondoScale > RG_RELEVANCE_TOL
         couplings[k] .= ifelse.(abs.(couplings[k]) ./ averageKondoScale .> RG_RELEVANCE_TOL, couplings[k], 0)
     end
-    couplings["μ"] = Dict(k => bareCouplings["μ$k"] for k in ["f", "d"])
+    couplings["η"] = Dict(k => bareCouplings["η$k"] for k in ["f", "d"])
     couplings["impCorr"] = Dict(k => bareCouplings["U$k"] for k in ["f", "d"])
 
-    couplings["V"] = Dict(k => abs.(bareCouplings["U$k"] .* diag(couplings[k][momentumPoints[k], momentumPoints[k]])).^0.5 for k in ["d", "f"])
+    couplings["V"] = Dict(k => abs.(bareCouplings["U$k"] .* diag(couplings[k])).^0.5 for k in ["d", "f"])
     couplings["Vbare"] = Dict(k => abs(bareCouplings["U$k"] * bareCouplings["J$k"]^0.5) for k in ["d", "f"])
 
     availableResults = Dict()
-    if isfile(saveJLD)
-        loadedResults = load(saveJLD)
-        merge!(availableResults, loadedResults)
-    end
     if loadData
+        if isfile(saveJLD)
+            loadedResults = load(saveJLD)
+            merge!(availableResults, loadedResults)
+        end
         if allReqKeys ⊆ keys(availableResults)
             println("Data available. $(join(allReqKeys, ", "))")
             return availableResults, couplings
@@ -657,31 +664,46 @@ end
         end
     end
 
-    results = Dict()
     if !isempty(correlation) || !isempty(entanglement)
-        merge!(results, IterDiagMomentumSpace(
-                                        couplings,
-                                        size_BZ,
-                                        maxSize,
-                                        momentumPoints;
-                                        correlation=correlation,
-                                        entanglement=entanglement,
-                                        addPerStep=1,
-                                       )
-               )
-    end
-    if !isempty(specFunc)
-        merge!(results, IterDiagMomentumSpace(
+        results = IterDiagMomentumSpace(
                                         couplings,
                                         size_BZ,
                                         maxSize,
                                         momentumPoints,
-                                        specFunc;
+                                        correlation,
+                                        entanglement;
                                         addPerStep=1,
                                        )
-               )
+        merge!(availableResults, results)
     end
-    merge!(availableResults, results)
+
+    if !isempty(specFunc)
+        for typesOrder in [["f", "d"], ["d", "f"]]
+            results = IterDiagMomentumSpace(
+                                            couplings,
+                                            size_BZ,
+                                            maxSize,
+                                            momentumPoints,
+                                            typesOrder,
+                                            specFunc;
+                                            addPerStep=1,
+                                           )
+            for (k, v) in results
+                if typeof(v) == Matrix{Float64}
+                    @assert !haskey(availableResults, k)
+                    availableResults[k] = v
+                else
+                    @assert typeof(v) == Float64
+                    if haskey(availableResults, k)
+                        availableResults[k] = 0.5 * (availableResults[k] + v)
+                    else
+                        availableResults[k] = v
+                    end
+                end
+            end
+        end
+    end
+
     if saveData
         save(saveJLD, availableResults)
     end
