@@ -105,43 +105,6 @@ function RGFlow(
 end
 
 
-function ScattProb(
-        size_BZ::Int64,
-        couplingsRange::Dict{String, Vector{Float64}}, 
-        axLab::Vector{String};
-        loadData::Bool=false,
-    )
-    nonAxLabs = sort([k for k in keys(couplingsRange) if k ∉ axLab])
-    basicCouplings = Dict{String, Float64}(k => v[1] for (k, v) in couplingsRange if length(v) == 1)
-    basicCouplings["omega_by_t"] = OMEGA_BY_t
-    basicCouplings["impU"] = impU
-    rangedCouplings = Dict{String, Vector{Float64}}(k => FillIn(v) for (k, v) in couplingsRange if length(v) == 3)
-    parameterSpace = Iterators.product([rangedCouplings[ax] for ax in axLab]...)
-    paths = String[]
-    for couplings in parameterSpace
-        allCouplings = merge(basicCouplings, Dict(axLab .=> couplings))
-        kondoJArray, kondoPerpArray, dispersion = momentumSpaceRG(size_BZ, allCouplings; loadData=loadData, saveData=true)
-
-        averageKondoScale = sum(abs.(kondoJArray[:, :, 1])) / length(kondoJArray[:, :, 1])
-        @assert averageKondoScale > RG_RELEVANCE_TOL
-        kondoJArray[:, :, end] .= ifelse.(abs.(kondoJArray[:, :, end]) ./ averageKondoScale .> RG_RELEVANCE_TOL, kondoJArray[:, :, end], 0)
-        kondoJArray[abs.(dispersion) .> 0.2 * HOP_T, :, end] .= 0
-        kondoJArray[:, abs.(dispersion) .> 0.2 * HOP_T, end] .= 0
-
-        node = map2DTo1D(π/2, π/2, size_BZ)
-        antinode = map2DTo1D(π/1, 0., size_BZ)
-        fig, ax = plt.subplots(ncols=2, figsize=(16, 6))
-        hm1 = ax[1].imshow(reshape(kondoJArray[node, :, end], size_BZ, size_BZ)', origin="lower")
-        hm2 = ax[2].imshow(reshape(kondoJArray[antinode, :, end], size_BZ, size_BZ)', origin="lower")
-        fig.colorbar(hm1)
-        fig.colorbar(hm2)
-        push!(paths, "SP-$(size_BZ)-" * ExtendedSaveName(allCouplings) * ".pdf")
-        fig.savefig(paths[end])
-    end
-    merge_pdfs(paths, "SP.pdf", cleanup=true)
-end
-
-
 function RealCorr(
         size_BZ,
         maxSize,
@@ -261,14 +224,25 @@ function RealCorr(
                    )
 end
 
-@everywhere function MomentumSpecFunc(
-        couplings,
-        size_BZ,
-        maxSize;
-        loadData::Bool=false,
+
+function MomentumSpecFunc(
+        size_BZ::Int64,
+        maxSize::Int64,
+        Jp_vals::Vector,
+        Wf_vals::Vector,
+        ηd::Number;
+        loadData=false
     )
+    names = Dict(
+                 "node_d" => L"A_d",
+                 "node_f" => L"A_f",
+                 "node_+" => L"A_+",
+                 "node_-" => L"A_-",
+                )
+
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
     momentumPoints = Dict(k => getIsoEngCont(dispersion, 0.) for k in ["f", "d"])
+    freqVals = collect(-15:0.001:15)
 
     antinode = map2DTo1D(π/1, 0., size_BZ)
     node = map2DTo1D(π/2, π/2, size_BZ)
@@ -319,152 +293,118 @@ end
                         #="Af_Kondo_loc" => ("f", i->[("+-+", [1,2,i+1], 1.), ("+-+", [2,1,i], 1.)]),=#
                        )
 
-    results, fpCouplings = AuxiliaryCorrelations(size_BZ,
-                                  couplings,
-                                  Dict(),
-                                  momentumPoints,
-                                  specFuncReqs,
-                                  maxSize;
-                                  entanglement=String[],
-                                  loadData=loadData,
-                                 )
-    additionalKeys = ["Ad_Siam_loc", "Af_Siam_loc", "d_Siam_+", "d_Siam_-", "f_Siam_+", "f_Siam_-", "Siam_+", "Siam_-"]
-    for k in filter(k -> haskey(results, k), additionalKeys)
-        results["in_$(k)"] = results[k]
-        results["out_$(k)"] = results[k]
-    end
+    counter = 1
+    couplings = copy(COUPLINGS)
+    couplings["ηd"] = ηd
+    plots = Dict(name => plt.subplots(ncols=length(Jp_vals), figsize=(8 * length(Jp_vals), 6)) for name in keys(names))
+    couplingSets = Iterators.product(Wf_vals, Jp_vals)
 
-    freqVals = collect(-15:0.001:15)
-    specFuncResults = Dict()
+    resultsPooled = @distributed merge for (Wf, Jp) in collect(couplingSets)
+        merge!(couplings, Dict("Wf" => Wf, "J⟂" => Jp))
+        #=results = MomentumSpecFunc(=#
+        #=                 merge(Dict("Wf" => Wf, "J⟂" => Jp), couplings),=#
+        #=                 size_BZ, =#
+        #=                 momentumPoints,=#
+        #=                 specFuncReqs,=#
+        #=                 maxSize;=#
+        #=                 loadData=loadData=#
+        #=                )                             =#
 
-    phAssymetry = couplings["μd"] - couplings["Ud"]/2
-    xvalsShift = 0.
-    effHybridisation = √(fpCouplings["⟂"] * 0.5 * (couplings["Ud"] + couplings["Uf"]))
-    gap = √(effHybridisation^2 + 0.25 * phAssymetry^2)
-    println("G = ", gap)
-    for k in keys(results)
-        if k ∉ keys(specFuncReqs) && k ∉ "in_" .* additionalKeys && k ∉ "out_" .* additionalKeys
-            continue
+        results, fpCouplings = AuxiliaryCorrelations(size_BZ,
+                                      couplings,
+                                      Dict(),
+                                      momentumPoints,
+                                      Dict(),
+                                      specFuncReqs,
+                                      maxSize;
+                                      loadData=loadData,
+                                     )
+        additionalKeys = ["Ad_Siam_loc", "Af_Siam_loc", "d_Siam_+", "d_Siam_-", "f_Siam_+", "f_Siam_-", "Siam_+", "Siam_-"]
+        for k in filter(k -> haskey(results, k), additionalKeys)
+            results["in_$(k)"] = results[k]
+            results["out_$(k)"] = results[k]
         end
-        specFuncResults[k] = 0 .* freqVals
-        for specCoeffs in results[k]
-            if isempty(specCoeffs)
+
+        freqVals = collect(-15:0.001:15)
+        specFuncResults = Dict()
+
+        xvalsShift = 0.
+        effHybridisation = √(fpCouplings["⟂"] * 0.5 * (couplings["Ud"] + couplings["Uf"]))
+        gap = √(effHybridisation^2 + 0.25 * couplings["ηd"]^2)
+        println("hybridisation gap = ", gap)
+        for k in keys(results)
+            if k ∉ keys(specFuncReqs) && k ∉ "in_" .* additionalKeys && k ∉ "out_" .* additionalKeys
                 continue
             end
-            if endswith(k, "+") || endswith(k, "-") || endswith(k, "loc")
-                bandEnergy = endswith(k, "+") ? (gap - phAssymetry) : (-gap - phAssymetry)
-                if abs(bandEnergy) > xvalsShift
-                    xvalsShift = bandEnergy
+            specFuncResults[k] = 0 .* freqVals
+            for specCoeffs in results[k]
+                if isempty(specCoeffs)
+                    continue
                 end
-                shiftedFrequency = freqVals .- bandEnergy
-                broadening = 0.1 .+ 4 .* abs.(shiftedFrequency / maximum(shiftedFrequency)).^1.5
-                if occursin("Kondo", k) || startswith(k, "in_")
-                    resonancePoles = filter(p -> abs(p[2]) < couplings["Jd"], specCoeffs)
-                    specFunc = SpecFunc(resonancePoles, shiftedFrequency, broadening; normalise=false)
-                elseif startswith(k, "out_") || occursin("Charge", k)
-                    resonancePoles = filter(p -> abs(p[2]) > couplings["Ud"]/3, specCoeffs)
-                    specFunc = SpecFunc(resonancePoles, shiftedFrequency, broadening; normalise=false)
+                if endswith(k, "+") || endswith(k, "-") || endswith(k, "loc")
+                bandEnergy = endswith(k, "+") ? (gap - couplings["ηd"]) : (-gap - couplings["ηd"])
+                    if abs(bandEnergy) > xvalsShift
+                        xvalsShift = bandEnergy
+                    end
+                    shiftedFrequency = freqVals .- bandEnergy
+                    broadening = 0.1 .+ 4 .* abs.(shiftedFrequency / maximum(shiftedFrequency)).^1.5
+                    if occursin("Kondo", k) || startswith(k, "in_")
+                        resonancePoles = filter(p -> abs(p[2]) < couplings["Jd"], specCoeffs)
+                        specFunc = SpecFunc(resonancePoles, shiftedFrequency, broadening; normalise=false)
+                    elseif startswith(k, "out_") || occursin("Charge", k)
+                        resonancePoles = filter(p -> abs(p[2]) > couplings["Ud"]/3, specCoeffs)
+                        specFunc = SpecFunc(resonancePoles, shiftedFrequency, broadening; normalise=false)
+                    else
+                        specFunc = SpecFunc(specCoeffs, shiftedFrequency, broadening; normalise=false)
+                    end
                 else
-                    specFunc = SpecFunc(specCoeffs, shiftedFrequency, broadening; normalise=false)
+                    broadening = 0.1
+                    specFunc = SpecFunc(specCoeffs, freqVals, broadening; normalise=false)
                 end
-            else
-                broadening = 0.1
-                specFunc = SpecFunc(specCoeffs, freqVals, broadening; normalise=false)
+                specFuncResults[k] .+= specFunc
             end
-            specFuncResults[k] .+= specFunc
+            specFuncResults[k] = Normalise(specFuncResults[k], freqVals; tolerance=0)
         end
-        specFuncResults[k] = Normalise(specFuncResults[k], freqVals; tolerance=0)
+
+        avgKondo_d = sum(abs.(fpCouplings["d"][momentumPoints["d"], momentumPoints["d"]])) / (length(momentumPoints["d"])^2 * couplings["Jd"])
+        specFuncResults["node_d"] = (
+                                     specFuncResults["in_d_Siam_+"]
+                                     + avgKondo_d * (specFuncResults["d_Kondo_+"] + specFuncResults["in_d_Siam_+"])
+                                     + specFuncResults["d_Charge_+"]
+                                     + specFuncResults["out_d_Siam_-"]
+                                     + avgKondo_d * (specFuncResults["d_Kondo_-"] + specFuncResults["in_d_Siam_-"])
+                                     + specFuncResults["d_Charge_-"]
+                                    )
+
+        avgKondo_f = sum(abs.(fpCouplings["f"][momentumPoints["f"], momentumPoints["f"]])) / (length(momentumPoints["f"])^2 * couplings["Jd"])
+        specFuncResults["node_f"] = (
+                                     specFuncResults["in_f_Siam_+"]
+                                     + avgKondo_f * (specFuncResults["f_Kondo_+"] + specFuncResults["in_f_Siam_+"])
+                                     + specFuncResults["f_Charge_+"]
+                                     + specFuncResults["out_f_Siam_-"]
+                                     + avgKondo_f * (specFuncResults["f_Kondo_-"] + specFuncResults["in_f_Siam_-"])
+                                     + specFuncResults["f_Charge_-"]
+                                    )
+
+        specFuncResults["node_+"] = 0.5 * (avgKondo_d + avgKondo_f) * (specFuncResults["Kondo_+"] .+ specFuncResults["in_Siam_+"]) + 1 * specFuncResults["out_Siam_+"] + 1 * specFuncResults["Charge_+"]
+        specFuncResults["node_-"] = 0.5 * (avgKondo_d + avgKondo_f) * (specFuncResults["Kondo_-"] .+ specFuncResults["in_Siam_-"]) + specFuncResults["out_Siam_-"] + specFuncResults["Charge_-"]
+
+        #=specFuncResults["Ad"] = avgKondo_d * (specFuncResults["Ad_Kondo_loc"] .+ specFuncResults["in_Ad_Siam_loc"]) + 1 * specFuncResults["out_Ad_Siam_loc"]=#
+        #=specFuncResults["Af"] = avgKondo_f * (specFuncResults["Af_Kondo_loc"] .+ specFuncResults["in_Af_Siam_loc"]) + 1 * specFuncResults["out_Af_Siam_loc"]=#
+
+        for (k, v) in specFuncResults
+            specFuncResults[k] = Normalise(v, freqVals)
+        end
+        Dict((Wf, Jp) => (specFuncResults, freqVals, xvalsShift))
     end
 
-    avgKondo_d = sum(abs.(fpCouplings["d"][momentumPoints["d"], momentumPoints["d"]])) / (length(momentumPoints["d"])^2 * couplings["Jd"])
-    specFuncResults["node_d"] = (
-                                 specFuncResults["in_d_Siam_+"]
-                                 + avgKondo_d * (specFuncResults["d_Kondo_+"] + specFuncResults["in_d_Siam_+"])
-                                 + specFuncResults["d_Charge_+"]
-                                 + specFuncResults["out_d_Siam_-"]
-                                 + avgKondo_d * (specFuncResults["d_Kondo_-"] + specFuncResults["in_d_Siam_-"])
-                                 + specFuncResults["d_Charge_-"]
-                                )
-
-    avgKondo_f = sum(abs.(fpCouplings["f"][momentumPoints["f"], momentumPoints["f"]])) / (length(momentumPoints["f"])^2 * couplings["Jd"])
-    specFuncResults["node_f"] = (
-                                 specFuncResults["in_f_Siam_+"]
-                                 + avgKondo_f * (specFuncResults["f_Kondo_+"] + specFuncResults["in_f_Siam_+"])
-                                 + specFuncResults["f_Charge_+"]
-                                 + specFuncResults["out_f_Siam_-"]
-                                 + avgKondo_f * (specFuncResults["f_Kondo_-"] + specFuncResults["in_f_Siam_-"])
-                                 + specFuncResults["f_Charge_-"]
-                                )
-
-    specFuncResults["node_+"] = 0.5 * (avgKondo_d + avgKondo_f) * (specFuncResults["Kondo_+"] .+ specFuncResults["in_Siam_+"]) + 1 * specFuncResults["out_Siam_+"] + 1 * specFuncResults["Charge_+"]
-    specFuncResults["node_-"] = 0.5 * (avgKondo_d + avgKondo_f) * (specFuncResults["Kondo_-"] .+ specFuncResults["in_Siam_-"]) + specFuncResults["out_Siam_-"] + specFuncResults["Charge_-"]
-
-    #=specFuncResults["Ad"] = avgKondo_d * (specFuncResults["Ad_Kondo_loc"] .+ specFuncResults["in_Ad_Siam_loc"]) + 1 * specFuncResults["out_Ad_Siam_loc"]=#
-    #=specFuncResults["Af"] = avgKondo_f * (specFuncResults["Af_Kondo_loc"] .+ specFuncResults["in_Af_Siam_loc"]) + 1 * specFuncResults["out_Af_Siam_loc"]=#
-
-    for (k, v) in specFuncResults
-        specFuncResults[k] = Normalise(v, freqVals)
-    end
-    return specFuncResults, freqVals, xvalsShift
-end
-
-
-#=function RealCorr(size_BZ, maxSize, loadData, J, Wf, ηf)=#
-#=    paths = String[]=#
-#=    couplings = copy(COUPLINGS)=#
-#=    couplings["μf"] = ηf + couplings["Uf"]/2=#
-#=    for μd in [1.0,] .* couplings["Ud"] / 2=#
-#=        couplings["μd"] = μd=#
-#=        path = RealCorr(couplings, =#
-#=                        Wf,=#
-#=                        J,=#
-#=                        size_BZ,=#
-#=                        maxSize;=#
-#=                        loadData=loadData=#
-#=                       )=#
-#=        push!(paths, path)=#
-#=    end=#
-#=    merge_pdfs(paths, "locCorr_$(size_BZ)_$(maxSize).pdf", cleanup=true)=#
-#=end=#
-
-
-function MomentumSpecFunc(size_BZ, maxSize, loadData)
-    Wf_vals = [0., -0.15]
-    Jp_vals = [0., 0.2]
-    names = Dict(
-                 "node_d" => L"A_d",
-                 "node_f" => L"A_f",
-                 "node_+" => L"A_+",
-                 "node_-" => L"A_-",
-                )
-    counter = 1
-    couplings = Dict("omega_by_t" => -2.,
-                     "Uf" => 9.,
-                     "Jf" => 0.1,
-                     "Wd_by_Wf" => 1.,
-                    )
-    couplings["Ud"] = couplings["Uf"] * couplings["Wd_by_Wf"]
-    couplings["μf"] = couplings["Uf"]/2
-    couplings["Jd"] = couplings["Jf"]
-    couplings["Wd"] = 0.
-    μdValues = [1.] .* couplings["Ud"] / 2
-    plots = Dict(name => plt.subplots(ncols=length(Jp_vals), nrows=length(μdValues), figsize=(8 * length(Jp_vals), 6 * length(μdValues))) for name in keys(names))
-    couplingSets = Iterators.product(Wf_vals, Jp_vals, μdValues)
-    resultsPooled = Dict(couplingSets .=> pmap(trip -> MomentumSpecFunc(merge(Dict("Wf" => trip[1], "J⟂" => trip[2], "μd" => trip[3]), couplings), size_BZ, maxSize; loadData=loadData), couplingSets))
-    for (Jp, μd) in Iterators.product(Jp_vals, μdValues)
-        couplings["J⟂"] = Jp
-        couplings["μd"] = μd
-        phAssymetry = round(couplings["μd"] - couplings["Ud"]/2, digits=3)
+    for Jp in Jp_vals
         for (name, ylabel) in names
-            ax = length(μdValues) * length(Jp_vals) > 1 ? plots[name][2][counter] : plots[name][2]
-            #=inset = ax.inset_axes([0.55,0.5,0.45,0.4])=#
+            ax = length(Jp_vals) > 1 ? plots[name][2][counter] : plots[name][2]
             for Wf in Wf_vals
-                couplings["Wf"] = Wf
-                results, xvals, xvalsShift = resultsPooled[(Wf, Jp, μd)]
+                results, xvals, xvalsShift = resultsPooled[(Wf, Jp)]
                 shiftedXvals = findall(x -> x < 10 + xvalsShift && x > -10 + xvalsShift, xvals)
                 ax.plot(xvals[shiftedXvals], results[name][shiftedXvals], label=L"W_f=%$(Wf)")
-                #=inset.plot(xvals[abs.(xvals) .< 0.5], results[name][abs.(xvals) .< 0.5], label=L"W_f=%$(Wf)")=#
-                #=inset.set_yscale("log")=#
             end
             ax.set_xlabel(L"\omega", fontsize=25)
             ax.set_ylabel(ylabel, fontsize=25)
@@ -476,7 +416,7 @@ function MomentumSpecFunc(size_BZ, maxSize, loadData)
                     $J_d=%$(couplings[\"Jd\"])$
                     $J_f=%$(couplings[\"Jf\"])$
                     $J_⟂=%$(Jp)$
-                    $η_d=%$(phAssymetry)$
+                    $η_d=%$(ηd)$
                     $W_d=%$(couplings["Wd"])$
                     """,
                     horizontalalignment="left", 
@@ -509,5 +449,5 @@ RGFlow(
      disabled=true,
     )
 
-@time RealCorr(33, 0896, 0.05:0.025:0.40, -0.0:-0.02:-0.160, 0.; loadData=false)
-#=@time MomentumSpecFunc(33, 531, false)=#
+#=@time RealCorr(33, 0896, 0.05:0.025:0.40, -0.0:-0.02:-0.160, 0.; loadData=false)=#
+@time MomentumSpecFunc(33, 911, [0., 0.2], [0., -0.15], 0.0; loadData=false)

@@ -152,7 +152,7 @@ end
                              J,
                              hamiltDetails["⟂"],
                              hybrid,
-                             hamiltDetails["μ"],
+                             hamiltDetails["η"],
                              hamiltDetails["impCorr"],
                              layerSpecs;
                              globalField=1e-8,
@@ -178,6 +178,7 @@ end
             continue
         end
         type = v[1]
+        @assert type ∈ ["if", "id", "f", "d", "+-"]
         if (type == "if" || type =="id") && type[2:2] == t1
             specFuncDefDict[k] = Dict()
             specFuncDefDict[k]["create"] = v[2]
@@ -186,11 +187,6 @@ end
             specFuncDefDict[k] = Dict()
             func = v[2]
             specFuncDefDict[k]["create"] = vcat(unique([func(3 + 2 * i) for i in fd_inds[type]])...)
-        end
-        if type == "fd"
-            specFuncDefDict[k] = Dict()
-            func = v[2]
-            specFuncDefDict[k]["create"] = vcat(unique([func(3 + 2 * i, 3 + 2 * j) for (i, j) in Iterators.product(fd_inds["f"], fd_inds["d"])])...)
         end
         if type == "+-"
             specFuncDefDict[k] = Dict()
@@ -223,9 +219,7 @@ end
 
     @assert results["exitCode"] == 0
 
-    for k in keys(specFuncDefDict)
-        corrResults[k] = results[k]
-    end
+    corrResults = Dict(k => results[k] for k in keys(specFuncDefDict))
     return corrResults
 end
 
@@ -689,16 +683,13 @@ end
                                             addPerStep=1,
                                            )
             for (k, v) in results
-                if typeof(v) == Matrix{Float64}
+                if typesOrder[1] == "f"
                     @assert !haskey(availableResults, k)
-                    availableResults[k] = v
+                end
+                if haskey(availableResults, k)
+                    availableResults[k] = vcat.(availableResults[k], v)
                 else
-                    @assert typeof(v) == Float64
-                    if haskey(availableResults, k)
-                        availableResults[k] = 0.5 * (availableResults[k] + v)
-                    else
-                        availableResults[k] = v
-                    end
+                    availableResults[k] = v
                 end
             end
         end
