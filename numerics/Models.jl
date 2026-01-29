@@ -442,3 +442,117 @@ function BilayerLEE(
     return hamiltonian
 end
 
+function BilayerLEEReal(
+        J::Vector{Float64},
+        Jp::Float64,
+        hybrid::Vector{Float64},
+        η::Dict{String, Float64},
+        impCorr::Dict{String, Float64},
+        hop_t::Float64,
+        layerSpecs::Vector{String},
+        hop_step::Int64;
+        globalField::Number=0,
+        couplingTolerance::Number=1e-15,
+    )
+    @assert layerSpecs[1] ≠ layerSpecs[end]
+    @assert length(J) == length(layerSpecs) == length(hybrid)
+
+    #### Indexing convention ####
+    # Sf   Sd   γ1   γ2  ...
+    # 1,2, 3,4, 5,6, 7,8 ...
+    hamiltonian = Tuple{String, Vector{Int64}, Float64}[]
+    if abs(Jp) > couplingTolerance
+        push!(hamiltonian,
+              ("nn",  [1, 3], Jp / 4)
+             ) # n_{d up, n_{0 up}
+        push!(hamiltonian,
+              ("nn",  [1, 4], -Jp / 4)
+             ) # n_{d up, n_{0 down}
+        push!(hamiltonian,
+              ("nn",  [2, 3], -Jp / 4)
+             ) # n_{d down, n_{0 up}
+        push!(hamiltonian,
+              ("nn",  [2, 4], Jp / 4)
+             ) # n_{d down, n_{0 down}
+        push!(hamiltonian,
+              ("+-+-",  [1, 2, 4, 3], Jp / 2)
+             ) # S_d^+ S_0^-
+        push!(hamiltonian,
+              ("+-+-",  [2, 1, 3, 4], Jp / 2)
+             ) # S_d^- S_0^+
+    end
+
+    # kondo terms
+    for (i, J_i) in enumerate(J)
+        if layerSpecs[i] == "f"
+            imp = 1
+        else
+            imp = 3
+        end
+        bath_i = 3 + 2 * i
+        if abs(J_i) > couplingTolerance
+            push!(hamiltonian, ("nn",  [imp, bath_i], J_i / 4))
+            push!(hamiltonian, ("nn",  [imp, bath_i + 1], -J_i / 4))
+            push!(hamiltonian, ("nn",  [imp + 1, bath_i,], -J_i / 4))
+            push!(hamiltonian, ("nn",  [imp + 1, bath_i + 1], J_i / 4))
+            push!(hamiltonian, ("+-+-",  [imp, imp + 1, bath_i + 1, bath_i], J_i / 2))
+            push!(hamiltonian, ("+-+-",  [imp + 1, imp, bath_i, bath_i + 1], J_i / 2))
+        end
+        if abs(hybrid[i]) > couplingTolerance
+            push!(hamiltonian, ("+-",  [imp, bath_i], hybrid[i])) # n_{d up, n_{0 up}
+            push!(hamiltonian, ("+-",  [imp + 1, bath_i + 1], hybrid[i])) # n_{d up, n_{0 up}
+            push!(hamiltonian, ("+-",  [bath_i, imp], hybrid[i])) # n_{d up, n_{0 up}
+            push!(hamiltonian, ("+-",  [bath_i + 1, imp + 1], hybrid[i])) # n_{d up, n_{0 up}
+        end
+
+    end
+
+    for (i, l) in enumerate(layerSpecs)
+        bath_i = 3 + 2 * i
+        if l == "d" && i < findall(==("d"), layerSpecs)[end]
+            push!(hamiltonian, ("+-",  [bath_i, bath_i + 2], -hop_t))
+            push!(hamiltonian, ("+-",  [bath_i + 2, bath_i], -hop_t))
+            push!(hamiltonian, ("+-",  [bath_i + 1, bath_i + 1 + 2], -hop_t))
+            push!(hamiltonian, ("+-",  [bath_i + 1 + 2, bath_i + 1], -hop_t))
+        end
+        if l == "f" && i < findall(==("f"), layerSpecs)[end]
+            push!(hamiltonian, ("+-",  [bath_i, bath_i + 2 * hop_step], -hop_t))
+            push!(hamiltonian, ("+-",  [bath_i + 2 * hop_step, bath_i], -hop_t))
+            push!(hamiltonian, ("+-",  [bath_i + 1, bath_i + 1 + 2 * hop_step], -hop_t))
+            push!(hamiltonian, ("+-",  [bath_i + 1 + 2 * hop_step, bath_i + 1], -hop_t))
+        end
+    end
+
+    for (site, k) in zip([1, 3], ["f", "d"])
+        if abs(η[k]) > couplingTolerance
+            push!(hamiltonian, ("n",  [site], -η[k]))
+            push!(hamiltonian, ("n",  [site + 1], -η[k]))
+        end
+    end
+
+    if abs(impCorr["f"]) > couplingTolerance
+        push!(hamiltonian, ("nn",  [1, 2], impCorr["f"]))
+        push!(hamiltonian, ("n",  [1], -0.5 * impCorr["f"]))
+        push!(hamiltonian, ("n",  [2], -0.5 * impCorr["f"]))
+    end
+    if abs(impCorr["d"]) > couplingTolerance
+        push!(hamiltonian, ("nn",  [3, 4], impCorr["d"]))
+        push!(hamiltonian, ("n",  [3], -0.5 * impCorr["d"]))
+        push!(hamiltonian, ("n",  [4], -0.5 * impCorr["d"]))
+    end
+
+    # global magnetic field (to lift any trivial degeneracy)
+    if abs(globalField) > couplingTolerance
+        for site in 1:2*(2 + size(J)[1])
+            if site % 2 == 1
+                push!(hamiltonian, ("n",  [site], globalField/2))
+            else
+                push!(hamiltonian, ("n",  [site], -globalField/2))
+            end
+        end
+    end
+
+    @assert !isempty(hamiltonian) "Hamiltonian is empty!"
+
+    return hamiltonian
+end

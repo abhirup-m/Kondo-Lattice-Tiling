@@ -428,105 +428,124 @@ end
 
 @everywhere function IterDiagRealSpace(
         hamiltDetails::Dict,
-        realKondo1D::Vector{Dict{NTuple{2, Int64}, Float64}},
+        size_BZ::Int64,
         maxSize::Int64,
-        numBathSites::Int64,
-        addPerStep::Int64,
+        momentumPoints::Dict{String, Vector{Int64}},
+        typesOrder::Vector{String},
+        specFunc::Dict;
+        addPerStep::Int64=1,
+        tolerance=-Inf,
     )
-    numChannels = length(realKondo1D)
 
-    hamiltDetails["imp_corr"] -= 2 * maximum(values(realKondo1D[1]))
-    hamiltonian = KondoModel(numBathSites, HOP_T, realKondo1D; globalField=hamiltDetails["globalField"])
-    append!(hamiltonian, [("n",  [1], -hamiltDetails["imp_corr"]/2), ("n",  [2], -hamiltDetails["imp_corr"]/2), ("nn",  [1, 2], hamiltDetails["imp_corr"])])
-
-    mutInfoSites = 1:2:numBathSites # [1, div(numBathSites, 4), div(numBathSites, 2), numBathSites]
-    I2_di = Dict("I2-d-$(i)" => ([1, 2], [3 + 2 * numChannels * (i-1), 4 + 2 * numChannels * (i-1)]) for i in mutInfoSites)
-    I2_d0i = Dict("I2-d-0$(i)" => ([1, 2], [3 + 2 * numChannels * (i-1), 4 + 2 * numChannels * (i-1), 3 + 2 * numChannels * (mutInfoSites[end]-1), 4 + 2 * numChannels * (mutInfoSites[end]-1)]) for i in mutInfoSites[1:end-1])
-    spinFlipCorrDefDict = Dict("SF-d-$(i)" => [("+-+-", [1, 2, 4 + 2 * numChannels * (i-1), 3 + 2 * numChannels * (i-1)], 0.5), ("+-+-", [2, 1, 3 + 2 * numChannels * (i-1), 4 + 2 * numChannels * (i-1)], 0.5)] for i in 1:numBathSites)
-    isingCorrDefDict = Dict("ZZ-d-$(i)" => [("nn", [1, 3 + 2 * numChannels * (i-1)], 0.25), ("nn", [1, 4 + 2 * numChannels * (i-1)], -0.25), ("nn", [2, 3 + 2 * numChannels * (i-1)], -0.25), ("nn", [2, 4 + 2 * numChannels * (i-1)], 0.25)] for i in 1:numBathSites)
-    imp_mag = Dict("Sdz" => [("n", [1], 0.5), ("n", [2], -0.5)], "Sdx" => [("+-", [1,2], 0.5), ("+-", [2,1], 0.5)], "Sdy" => [("+-", [1,2], 0.5), ("+-", [2,1], -0.5)])
-    Sdz_sq = Dict("Sdz_sq" => [("n", [1], 0.25), ("n", [2], 0.25), ("nn", [1, 2], -0.5)])
-    QFI = Dict("n_tot_sq" => Tuple{String, Vector{Int64}, Float64}[], "n_tot" => Tuple{String, Vector{Int64}, Float64}[])
-    up(k) = 1 + 2 * k
-    down(k) = up(k)
-    count = length(0:2:numChannels*(numBathSites-1))
-    for i in 0:2:numChannels*(numBathSites-1)
-        for j in 0:numChannels:numChannels*(numBathSites-1)
-            append!(QFI["n_tot_sq"], [("+-+-+-+-", [up(i), down(i), down(i+1), up(i+1), up(j), down(j), down(j+1), up(j+1)], 0.25 / count)])
-            append!(QFI["n_tot_sq"], [("+-+-+-+-", [up(i+1), down(i+1), down(i), up(i), up(j), down(j), down(j+1), up(j+1)], 0.25 / count)])
-            append!(QFI["n_tot_sq"], [("+-+-+-+-", [up(i+1), down(i+1), down(i), up(i), up(j+1), down(j+1), down(j), up(j)], 0.25 / count)])
-            append!(QFI["n_tot_sq"], [("+-+-+-+-", [up(i), down(i), down(i+1), up(i+1), up(j+1), down(j+1), down(j), up(j)], 0.25 / count)])
-        end
-        append!(QFI["n_tot"], [("+-+-", [up(i), down(i), down(i+1), up(i+1)], 0.5 / count)])
-        append!(QFI["n_tot"], [("+-+-", [up(i+1), down(i+1), down(i), up(i)], 0.5 / count)])
+    t1, t2 = typesOrder
+    # only momentum points with ky ≥ 0 need to be
+    # solved for, the rest can be mapped exactly
+    truncatedPoints = Dict()
+    for k in ["f", "d"]
+        #=truncatedPoints[k] = filter(p -> true, momentumPoints[k])=#
+        truncatedPoints[k] = filter(p -> map1DTo2D(p, size_BZ)[2] ≥ 0, momentumPoints[k])
     end
-    #=corrDefDict = imp_mag=#
-    corrDefDict = merge(spinFlipCorrDefDict, isingCorrDefDict)
-    indexPartitions = [4]
-    while indexPartitions[end] < 2 + 2 * numChannels * numBathSites
-        push!(indexPartitions, minimum((indexPartitions[end] + 2 * addPerStep, 2 + 2 * numChannels * numBathSites)))
+    println(sort(diag(hamiltDetails["f"][truncatedPoints["f"], truncatedPoints["f"]])))
+
+    totalSize = length(truncatedPoints["f"]) + 1
+
+    # define Kondo matrix just for the upper half, for both layers
+    J = zeros(totalSize)
+    
+    # this stores the information of which indices in J
+    # store couplings from which layer. Since the first N
+    # indices are f, we set them true, the last N is set to false.
+    layerSpecs = repeat([t1], totalSize-1)
+    push!(layerSpecs, t2)
+
+    # the first NxN points store the d-Kondo couplings,
+    # while the last NxN store the f-couplings. This means
+    # that d-correlations must be calculated from the 
+    # upper half, while f-correlations come from lower half.
+    hybrid = hamiltDetails["V"][t1][truncatedPoints[t1]]
+    push!(hybrid, (sum(hamiltDetails["V"][t2].^2)^0.5) / length(hamiltDetails["V"][t2]))
+    indices = 1:(length(truncatedPoints[t1])-1)
+    sortseq = collect(indices)
+    @assert length(indices) % 2 == 0
+    J[end] = (sum(diag(hamiltDetails[t2][truncatedPoints[t2], truncatedPoints[t2]]).^2)^0.5) / length(truncatedPoints[t2])
+
+    hop_eff = HOP_T
+    hop_step = 2
+    if any(>(0), abs.(diag(hamiltDetails[t1]))) && any(==(0), abs.(diag(hamiltDetails[t1])))
+        println(1)
+        J[indices[1:2:end]] .= [sum([2 * abs(hamiltDetails[t1][k, q] * cos(r * (map1DTo2D(k, size_BZ)[1] - map1DTo2D(q, size_BZ)[1]))) for k in momentumPoints[t1] for q in momentumPoints[t1] if map1DTo2D(k, size_BZ)[1] ≥ 0 && map1DTo2D(q, size_BZ)[1] ≥ 0]) for r in 0:(div(indices[end], 2)-1)]
+        sortseq[indices[1:2:end]] = sortperm(abs.(J[indices[1:2:end]]), rev=true)
+        J[indices[2:2:end]] .= J[indices[1:2:end]]
+        sortseq[indices[2:2:end]] = sortperm(abs.(J[indices[2:2:end]]), rev=true)
+    else
+        J[indices] .= [sum([2 * abs(hamiltDetails[t1][k, k] * cos(r * map1DTo2D(k, size_BZ)[1])) for k in momentumPoints[t1] if map1DTo2D(k, size_BZ)[1] ≥ 0]) for r in 0:(length(indices) - 1)]
+        sortseq[indices] = sortperm(abs.(J[indices]), rev=true)
+        hop_step = 1
     end
 
+    J[indices] = J[indices][sortseq]
+    layerSpecs[indices] = layerSpecs[indices][sortseq]
+    hybrid[indices] = hybrid[indices][sortseq]
+
+    # obtain Hamiltonian with sorted Kondo matrix
+    
+    hamiltonian = BilayerLEEReal(
+                                 J,
+                                 hamiltDetails["⟂"],
+                                 1 * hybrid,
+                                 hamiltDetails["η"],
+                                 hamiltDetails["impCorr"],
+                                 hop_eff,
+                                 layerSpecs,
+                                 hop_step;
+                                 globalField=1e-8,
+                                 couplingTolerance=1e-10,
+                            )
+    # split hamiltonian into chunks for iterative diagonalisation.
+    # The first chunk has 10 qubits, then we subsequently keep
+    # adding 2 qubits (k↑, k↓) every iteration.
+    indexPartitions = [10]
+    while indexPartitions[end] < 2 * (2 + length(layerSpecs))
+        push!(indexPartitions, indexPartitions[end] + 2 * hop_step)
+    end
     hamiltonianFamily = MinceHamiltonian(hamiltonian, indexPartitions)
     @assert all(!isempty, hamiltonianFamily)
-    for hamiltonian in hamiltonianFamily
-        @assert all(!isempty, hamiltonian)
+    for h_i in hamiltonianFamily
+        @assert all(!isempty, h_i)
     end
-    results = Dict()
 
-    id = nothing
-    exitCode = 0
-    specDictSet = ImpurityExcitationOperators(1)
-    while true
-        @time output = IterDiag(
-                          hamiltonianFamily, 
-                          maxSize;
-                          symmetries=Char['N', 'S'],
-                          #=magzReq=(m, N) -> -3 ≤ m ≤ 3,=#
-                          #=occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,=#
-                          #=mutInfoDefDict=deepcopy(I2_di),=#
-                          #=correlationDefDict=deepcopy(QFI),=#
-                          #=correlationDefDict=deepcopy(corrDefDict),=#
-                          silent=false,
-                          maxMaxSize=maxSize,
-                          specFuncDefDict=specDictSet,
-                         )
-        #=savePaths, iterDiagResults, exitCode, specFuncOperators = output=#
-        savePaths, iterDiagResults, specFuncOperators = output
-        results["SFO"] = specFuncOperators
-        #=savePaths, iterDiagResults, exitCode = output=#
-        #=savePaths, iterDiagResults = output=#
-        results["SP"] = savePaths
-
-
-        if exitCode > 0
-            id = rand()
-            println("Error code $(exitCode). Retry id=$(id).")
-        else
-            if !isnothing(id)
-                println("Passed $(id).")
-            end
-            for i in 1:numBathSites
-                corrKeys = [("SF-di", "SF-d-$(i)"), ("ZZ-di", "ZZ-d-$(i)"), ("I2-di", "I2-d-$(i)"), ("I2-d0i", "I2-d-0$(i)")]
-                for (k1, k2) in corrKeys
-                    if k2 in keys(iterDiagResults)
-                        if k1 ∉ keys(results)
-                            results[k1] = Float64[]
-                        end
-                        push!(results[k1], iterDiagResults[k2])
-                    end
-                end
-            end
-            corrKeys = ["Sdx", "Sdy", "Sdz", "Sdz_sq", "n_tot_sq", "n_tot"]
-            for k in corrKeys
-                if k in keys(iterDiagResults)
-                    results[k] = iterDiagResults[k]
-                end
-            end
-            break
+    specFuncDefDict = Dict{String, Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}}()
+    fd_inds = Dict(k => findall(==(k), layerSpecs) for k in ["f", "d"])
+    for (k, v) in specFunc
+        if k == "ω" || k == "η"
+            continue
+        end
+        type = v[1]
+        @assert type ∈ ["if", "id"]
+        if type[2:2] == t1
+            specFuncDefDict[k] = Dict()
+            specFuncDefDict[k]["create"] = v[2]
+        end
+        if haskey(specFuncDefDict, k)
+            specFuncDefDict[k]["destroy"] = Dagger(copy(specFuncDefDict[k]["create"]))
         end
     end
-    return results, 1:numBathSites, mutInfoSites
+    results = IterDiag(
+                      hamiltonianFamily,
+                      maxSize;
+                      symmetries=Char['N', 'S'],
+                      #=magzReq=(m, N) -> -5 ≤ m ≤ 5,=#
+                      #=occReq=(x, N) -> div(N, 2) - 5 ≤ x ≤ div(N, 2) + 5,=#
+                      specFuncDefDict=specFuncDefDict,
+                      #=excludeLevels=E -> abs(E) > 1.0,=#
+                      silent=false,
+                      maxMaxSize=maxSize,
+                     )
+
+    @assert results["exitCode"] == 0
+
+    corrResults = Dict(k => results[k] for k in keys(specFuncDefDict))
+    return corrResults
 end
 
 
@@ -673,15 +692,27 @@ end
 
     if !isempty(specFunc)
         for typesOrder in [["f", "d"], ["d", "f"]]
-            results = IterDiagMomentumSpace(
-                                            couplings,
-                                            size_BZ,
-                                            maxSize,
-                                            momentumPoints,
-                                            typesOrder,
-                                            specFunc;
-                                            addPerStep=1,
-                                           )
+            if any(k -> contains(k, "_loc"), keys(specFunc))
+                results = IterDiagRealSpace(
+                                                couplings,
+                                                size_BZ,
+                                                maxSize,
+                                                momentumPoints,
+                                                typesOrder,
+                                                specFunc;
+                                                addPerStep=1,
+                                               )
+            else
+                results = IterDiagMomentumSpace(
+                                                couplings,
+                                                size_BZ,
+                                                maxSize,
+                                                momentumPoints,
+                                                typesOrder,
+                                                specFunc;
+                                                addPerStep=1,
+                                               )
+            end
             for (k, v) in results
                 if typesOrder[1] == "f"
                     @assert !haskey(availableResults, k)
