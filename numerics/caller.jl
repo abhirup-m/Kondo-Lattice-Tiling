@@ -36,12 +36,13 @@ end
 end
 
 @everywhere const COUPLINGS = Dict("omega_by_t" => -2.,
-                                   "Ud" => 3.,
-                                   "Jf" => 0.1,
+                                   "Ud" => 4.0,
+                                   "Uf" => 8.0,
+                                   "Jf" => 0.2,
                                    "Jd" => 0.1,
                                    "Wd" => -0.0,
                                    "ηf" => 0.,
-                                   "U_by_W" => 300.,
+                                   "U_by_W" => 200.,
                     )
 
 function RGFlow(
@@ -422,11 +423,12 @@ function RealSpecFunc(
         ηd::Number;
         loadData=false
     )
+    freqVals = collect(-15:0.001:15)
     names = Dict(
                  "Ad" => L"A_d",
                  "Af" => L"A_f",
-                 #="node_+" => L"A_+",=#
-                 #="node_-" => L"A_-",=#
+                 "A+" => L"A_+",
+                 "A-" => L"A_-",
                 )
 
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
@@ -436,13 +438,6 @@ function RealSpecFunc(
     antinode = map2DTo1D(π/1, 0., size_BZ)
     node = map2DTo1D(π/2, π/2, size_BZ)
     impSites = Dict("f" => [1, 2], "d" => [3, 4])
-
-    specFuncReqs = Dict(
-                        "Ad_Siam_loc" => ("id", [("+", [3,], 1.), ("+", [4,], 1.)]),
-                        "Af_Siam_loc" => ("if", [("+", [1,], 1.), ("+", [2,], 1.)]),
-                        "Ad_Kondo_loc" => ("id", [("+-+", [3,4,6], 1.), ("+-+", [4,3,5], 1.)]),
-                        "Af_Kondo_loc" => ("if", [("+-+", [1,2,6], 1.), ("+-+", [2,1,5], 1.)]),
-                       )
 
     counter = 1
     couplings = copy(COUPLINGS)
@@ -454,8 +449,79 @@ function RealSpecFunc(
         merge!(couplings, Dict("Wf" => Wf,
                                "J⟂" => Jp,
                                "Uf" => impCorr(Wf, couplings["U_by_W"]),
+                               #="Ud" => impCorr(couplings["Wd"], couplings["U_by_W"]),=#
                               )
               )
+
+        effHybridisation = 2√(Jp * (COUPLINGS["Ud"] + COUPLINGS["Uf"]))
+        hybridMatrix = [[0, -effHybridisation] [-effHybridisation, -ηd]]
+        # matrix is in the basis of [f, d]; first eigenvector is (1, 1), second is (1, -1)
+        gap, V = eigen(hybridMatrix)
+        hybCoeffs = Dict(k => Dict(["f", "d"] .=> all(≤(0), V[:, i]) ? -V[:, i] : V[:, i]) for (i, k) in enumerate(["+", "-"]))
+        display(hybCoeffs)
+
+        specFuncReqs = Dict()
+        siam(coeff, orb) = [("+", [i], coeff) for i in impSites[orb]]
+        kondo(coeff, orb, bath) = [("+-+", [imp..., bath+2-i], coeff) for (i,imp) in enumerate([impSites[orb], reverse(impSites[orb])])]
+
+        for band in ["+", "-"]
+            for k in ["d", "f"]
+                specFuncReqs["Siam_$(band)_$(k)_loc"] = ("i", 
+                           Dict(
+                                "create" => siam(1., k),
+                                "destroy" => Dagger(vcat(siam(hybCoeffs[band]["f"], "f"), siam(hybCoeffs[band]["d"], "d"))), 
+                                #=[("-", [1,],hybCoeffs["+"]["f"]), =#
+                                #=              ("-", [2,],hybCoeffs["+"]["f"]),=#
+                                #=              ("-", [3,],hybCoeffs["+"]["d"]),=#
+                                #=              ("-", [4,],hybCoeffs["+"]["d"]),=#
+                                #=             ],=#
+                               ),
+                          )
+                specFuncReqs["Siam_$(k)_$(band)_loc"] = ("i", 
+                           Dict(
+                                "create" => vcat(siam(hybCoeffs[band]["f"], "f"), siam(hybCoeffs[band]["d"], "d")), 
+                                "create" => Dagger(siam(1., k)),
+                                #=[("-", [1,],hybCoeffs["+"]["f"]), =#
+                                #=              ("-", [2,],hybCoeffs["+"]["f"]),=#
+                                #=              ("-", [3,],hybCoeffs["+"]["d"]),=#
+                                #=              ("-", [4,],hybCoeffs["+"]["d"]),=#
+                                #=             ],=#
+                               ),
+                          )
+                specFuncReqs["Kondo_$(band)0_0$(k)_loc"] = ("i$(k)",
+                     lastInd -> Dict(
+                                     "create" => kondo(1., k, 5),
+                                     #[("+-+", [impSites[k]...,6], 1.), ("+-+", [reverse(impSites[k])...,5], 1.),],
+                                     "destroy" => Dagger(vcat(kondo(hybCoeffs[band][k], k, 5), 
+                                                              kondo(hybCoeffs[band][k=="d" ? "f" : "d"], k, lastInd)
+                                                             ))
+                                      #=[=#
+                                      #=              ("+--",[impSites[k]..., 5], hybCoeffs["+"][k]),=#
+                                      #=              ("+--",[reverse(impSites[k])..., 6], hybCoeffs["+"][k]),=#
+                                      #=              ("+--",[impSites[k]..., lastInd], hybCoeffs["+"][k=="d" ? "f" : "d"]),=#
+                                      #=              ("+--",[reverse(impSites[k])..., lastInd + 1], hybCoeffs["+"][k=="d" ? "f" : "d"]),=#
+                                      #=             ],=#
+                                 ),
+                    )
+                specFuncReqs["Kondo_0$(k)_$(band)0_loc"] = ("i$(k)",
+                     lastInd -> Dict(
+                                     "create" => vcat(kondo(hybCoeffs[band][k], k, 5), 
+                                                      kondo(hybCoeffs[band][k=="d" ? "f" : "d"], k, lastInd)
+                                                     ),
+                                     "destroy" => Dagger(kondo(1., k, 5)),
+                                      #=[=#
+                                      #=              ("+--",[impSites[k]..., 5], hybCoeffs["+"][k]),=#
+                                      #=              ("+--",[reverse(impSites[k])..., 6], hybCoeffs["+"][k]),=#
+                                      #=              ("+--",[impSites[k]..., lastInd], hybCoeffs["+"][k=="d" ? "f" : "d"]),=#
+                                      #=              ("+--",[reverse(impSites[k])..., lastInd + 1], hybCoeffs["+"][k=="d" ? "f" : "d"]),=#
+                                      #=             ],=#
+                                 ),
+                    )
+            end
+            specFuncReqs["Siam_$(band)_$(band)_loc"] = ("i", vcat(siam(1., "d"), siam(1., "f")))
+            specFuncReqs["Kondo_$(band)_$(band)_d_loc"] = ("id", lastInd -> vcat(kondo(1., "d", 5), kondo(1., "f", lastInd)))
+            specFuncReqs["Kondo_$(band)_$(band)_f_loc"] = ("if", lastInd -> vcat(kondo(1., "f", 5), kondo(1., "d", lastInd)))
+        end
 
         results, fpCouplings = AuxiliaryCorrelations(size_BZ,
                                       couplings,
@@ -466,59 +532,133 @@ function RealSpecFunc(
                                       maxSize;
                                       loadData=loadData,
                                      )
-        for k in filter(k -> contains(k, "Siam"), keys(specFuncReqs))
-            results["in_$(k)"] = results[k]
-            results["out_$(k)"] = results[k]
-            delete!(results, k)
-        end
+        avgKondo = Dict(k => minimum((1, sum(abs.(fpCouplings[k][momentumPoints[k], momentumPoints[k]])) / (length(momentumPoints[k])^1.0 * couplings["J$(k)"]))) for k in ["f", "d"])
+        #=avgKondo = Dict(k => minimum((Inf, sum(abs.(fpCouplings[k][momentumPoints[k], momentumPoints[k]])) / (length(momentumPoints[k])^1.0 * couplings["J$(k)"]))) for k in ["f", "d"])=#
+        println(Wf, avgKondo)
 
-        freqVals = collect(-15:0.001:15)
         specFuncResults = Dict()
 
-        xvalsShift = 0.
-        effHybridisation = √(fpCouplings["⟂"] * 0.5 * (couplings["Ud"] + couplings["Uf"]))
-        gap = √(effHybridisation^2 + 0.25 * couplings["ηd"]^2)
-        println("hybridisation gap = ", gap)
-        for k in keys(results)
+        for k in filter(k -> contains(k, "Siam"), keys(specFuncReqs))
+            for dict in [results, specFuncReqs]
+                dict["in_$(k)"] = dict[k]
+                dict["out_$(k)"] = dict[k]
+                delete!(dict, k)
+            end
+        end
+
+        xvalsShift = couplings["ηd"]
+        for k in keys(specFuncReqs)
             if k ∉ keys(specFuncReqs) && !contains(k, "in_") && !contains(k, "out_")
                 continue
             end
             specFuncResults[k] = 0 .* freqVals
-            for specCoeffs in results[k]
-                if isempty(specCoeffs)
-                    continue
-                end
-                bandEnergy = endswith(k, "+") ? (gap - couplings["ηd"]) : (-gap - couplings["ηd"])
-                if abs(bandEnergy) > xvalsShift
-                    xvalsShift = bandEnergy
-                end
-                shiftedFrequency = freqVals .- bandEnergy
-                broadening = 0.2 .+ 1 .* abs.(shiftedFrequency./maximum(shiftedFrequency)).^0.5
-                specFunc = SpecFunc(specCoeffs, shiftedFrequency, broadening; normalise=false)
-                @assert occursin("Kondo", k) || startswith(k, "in_") || startswith(k, "out_")
-                if occursin("Kondo", k) || startswith(k, "in_")
-                    #=resonancePoles = filter(p -> true, specCoeffs)=#
-                    resonancePoles = filter(p -> abs(p[2]) < 1.5, specCoeffs)
-                    specFunc = SpecFunc(resonancePoles, shiftedFrequency, broadening; normalise=false)
-                else
-                    resonancePoles = filter(p -> abs(p[2]) > couplings["Ud"]/3, specCoeffs)
-                    specFunc = SpecFunc(resonancePoles, shiftedFrequency, broadening; normalise=false)
-                end
-                specFuncResults[k] .+= specFunc
+            bandEnergy = 0
+            @assert contains(k, "_+_") || contains(k, "_+0_") || contains(k, "_-_") || contains(k, "_-0_") k
+            if contains(k, "_+_") || contains(k, "_+0_")
+                bandEnergy = gap[2]
+            else
+                bandEnergy = gap[1]
             end
-            specFuncResults[k] = Normalise(specFuncResults[k], freqVals; tolerance=1e-4)
+
+            broadening = 0.1 * ones(length(freqVals))
+            specCoeffs = vcat(results[k]...)
+            if !isempty(specCoeffs)
+
+                partition = (Inf, 0)
+                if contains(k, "_d_") || contains(k, "_0d_")
+                    partition = (couplings["Ud"], couplings["Ud"]/3)
+                elseif contains(k, "_f_") || contains(k, "_0f_")
+                    partition = (couplings["Uf"], couplings["Uf"]/3)
+                end
+                if occursin("Kondo", k) || startswith(k, "in_")
+                    filter!(p -> abs(p[2]) < 1., specCoeffs)
+                    map!(p -> (p[1], p[2] + bandEnergy), specCoeffs)
+                    if maximum(partition) == 0
+                        broadening .+= 2 * (abs.(freqVals .- bandEnergy)./maximum(freqVals)).^0.5
+                    end
+                else
+                    map!(p -> (p[1], p[2] + bandEnergy), specCoeffs)
+                    filter!(p -> partition[1] > abs(p[2]) > partition[2]/3, specCoeffs)
+                    broadening[abs.(freqVals) .> minimum(partition) + bandEnergy] .+= 1 * ((abs.(freqVals) .- minimum(partition) .- bandEnergy)[abs.(freqVals) .> minimum(partition) + bandEnergy]./maximum(freqVals)).^0.5
+                end
+                specFuncResults[k] = SpecFunc(specCoeffs, freqVals, broadening; normalise=false)
+                specFuncResults[k] = Normalise(specFuncResults[k], freqVals; tolerance=1e-4)
+            else
+                println("$(k) is empty!")
+            end
         end
 
-        avgKondo = Dict(k => sum(abs.(fpCouplings[k][momentumPoints[k], momentumPoints[k]])) / (length(momentumPoints[k])^1.0 * couplings["J$(k)"]) for k in ["f", "d"])
-        println(avgKondo["f"])
-
-        #=specFuncResults["Ad"] = avgKondo["d"] * (specFuncResults["Ad_Kondo_loc"] .+ 0 .* specFuncResults["in_Ad_Siam_loc"]) + 0 * specFuncResults["out_Ad_Siam_loc"]=#
-        specFuncResults["Af"] = avgKondo["f"] * (1 .* specFuncResults["Af_Kondo_loc"] .+ 1 .* specFuncResults["in_Af_Siam_loc"]) + 1 * specFuncResults["out_Af_Siam_loc"]
-        specFuncResults["Ad"] = specFuncResults["Af"]
+        specFuncResults["Ad"] = abs.(avgKondo["d"] * (
+                                                  0
+                                                 .+ hybCoeffs["+"]["d"] * specFuncResults["in_Siam_+_d_loc"] 
+                                                 .+ hybCoeffs["-"]["d"] * specFuncResults["in_Siam_-_d_loc"]
+                                                 .+ hybCoeffs["+"]["d"] * specFuncResults["Kondo_+0_0d_loc"] 
+                                                 .+ hybCoeffs["-"]["d"] * specFuncResults["Kondo_-0_0d_loc"] 
+                                                 .+ hybCoeffs["+"]["d"] * specFuncResults["in_Siam_d_+_loc"] 
+                                                 .+ hybCoeffs["-"]["d"] * specFuncResults["in_Siam_d_-_loc"]
+                                                 .+ hybCoeffs["+"]["d"] * specFuncResults["Kondo_0d_+0_loc"] 
+                                                 .+ hybCoeffs["-"]["d"] * specFuncResults["Kondo_0d_-0_loc"] 
+                                                ) 
+                                 .+ hybCoeffs["+"]["d"] * specFuncResults["out_Siam_+_d_loc"] 
+                                 .+ hybCoeffs["-"]["d"] * specFuncResults["out_Siam_-_d_loc"]
+                                 .+ hybCoeffs["+"]["d"] * specFuncResults["out_Siam_d_+_loc"] 
+                                 .+ hybCoeffs["-"]["d"] * specFuncResults["out_Siam_d_-_loc"]
+                                )
+        specFuncResults["Af"] = abs.(avgKondo["f"] * (
+                                                  0
+                                                 .+ hybCoeffs["+"]["f"] * specFuncResults["in_Siam_+_f_loc"] 
+                                                 .+ hybCoeffs["-"]["f"] * specFuncResults["in_Siam_-_f_loc"]
+                                                 .+ hybCoeffs["+"]["f"] * specFuncResults["Kondo_+0_0f_loc"] 
+                                                 .+ hybCoeffs["-"]["f"] * specFuncResults["Kondo_-0_0f_loc"] 
+                                                 .+ hybCoeffs["+"]["f"] * specFuncResults["in_Siam_f_+_loc"] 
+                                                 .+ hybCoeffs["-"]["f"] * specFuncResults["in_Siam_f_-_loc"]
+                                                 .+ hybCoeffs["+"]["f"] * specFuncResults["Kondo_0f_+0_loc"] 
+                                                 .+ hybCoeffs["-"]["f"] * specFuncResults["Kondo_0f_-0_loc"] 
+                                                 ) 
+                                 .+ hybCoeffs["+"]["f"] * specFuncResults["out_Siam_+_f_loc"] 
+                                 .+ hybCoeffs["-"]["f"] * specFuncResults["out_Siam_-_f_loc"]
+                                 .+ hybCoeffs["+"]["f"] * specFuncResults["out_Siam_f_+_loc"] 
+                                 .+ hybCoeffs["-"]["f"] * specFuncResults["out_Siam_f_-_loc"]
+                                )
+        specFuncResults["Afd"] = abs.(0.5 * (avgKondo["d"] + avgKondo["f"]) * (
+                                                  0
+                                                 .+ hybCoeffs["+"]["f"] * specFuncResults["in_Siam_+_d_loc"] 
+                                                 .+ hybCoeffs["-"]["f"] * specFuncResults["in_Siam_-_d_loc"]
+                                                 .+ hybCoeffs["+"]["d"] * specFuncResults["in_Siam_f_+_loc"] 
+                                                 .+ hybCoeffs["-"]["d"] * specFuncResults["in_Siam_f_-_loc"]
+                                                 .+ hybCoeffs["+"]["f"] * specFuncResults["Kondo_+0_0d_loc"] 
+                                                 .+ hybCoeffs["-"]["f"] * specFuncResults["Kondo_-0_0d_loc"] 
+                                                 .+ hybCoeffs["+"]["d"] * specFuncResults["Kondo_0f_+0_loc"] 
+                                                 .+ hybCoeffs["-"]["d"] * specFuncResults["Kondo_0f_-0_loc"] 
+                                                ) 
+                                         .+ hybCoeffs["+"]["f"] * specFuncResults["out_Siam_+_d_loc"] 
+                                         .+ hybCoeffs["-"]["f"] * specFuncResults["out_Siam_-_d_loc"]
+                                         .+ hybCoeffs["+"]["d"] * specFuncResults["out_Siam_f_+_loc"] 
+                                         .+ hybCoeffs["-"]["d"] * specFuncResults["out_Siam_f_-_loc"]
+                                )
+        specFuncResults["Adf"] = specFuncResults["Afd"]
+        specFuncResults["A+"] = (
+                                 avgKondo["d"] * avgKondo["f"] * (
+                                                                          specFuncResults["in_Siam_+_+_loc"]
+                                                                         .+ specFuncResults["Kondo_+_+_d_loc"]
+                                                                         .+ specFuncResults["Kondo_+_+_f_loc"]
+                                                                        )
+                                 .+ specFuncResults["out_Siam_+_+_loc"]
+                                )
+        specFuncResults["A-"] = (
+                                 avgKondo["d"] * avgKondo["f"] * (
+                                                                          specFuncResults["in_Siam_-_-_loc"]
+                                                                         .+ specFuncResults["Kondo_-_-_d_loc"]
+                                                                         .+ specFuncResults["Kondo_-_-_f_loc"]
+                                                                        )
+                                 .+ specFuncResults["out_Siam_-_-_loc"]
+                                )
 
         for (k, v) in specFuncResults
             specFuncResults[k] = Normalise(v, freqVals)
-            specFuncResults[k] = 0.5 .* (specFuncResults[k] .+ reverse(specFuncResults[k]))
+            #=if Jp == 0=#
+            #=    specFuncResults[k] = 0.5 .* (specFuncResults[k] .+ reverse(specFuncResults[k]))=#
+            #=end=#
         end
         Dict((Wf, Jp) => (specFuncResults, freqVals, xvalsShift))
     end
@@ -526,14 +666,19 @@ function RealSpecFunc(
     for Jp in Jp_vals
         for (name, ylabel) in names
             ax = length(Jp_vals) > 1 ? plots[name][2][counter] : plots[name][2]
+            ins = ax.inset_axes([0.6,0.6,0.4,0.4])
             for Wf in Wf_vals
                 results, xvals, xvalsShift = resultsPooled[(Wf, Jp)]
                 shiftedXvals = findall(x -> x < 10 + xvalsShift && x > -10 + xvalsShift, xvals)
+                shiftedXvalsSmall = findall(x -> 0 < x < 1.0 + xvalsShift, xvals)
                 ax.plot(xvals[shiftedXvals], results[name][shiftedXvals], label=L"W_f=%$(Wf)")
+                ins.plot(xvals[shiftedXvalsSmall], results[name][shiftedXvalsSmall], label=L"W_f=%$(Wf)")
+                ins.set_yscale("log")
+                #=ins.set_xscale("log")=#
             end
             ax.set_xlabel(L"\omega", fontsize=25)
             ax.set_ylabel(ylabel, fontsize=25)
-            ax.legend(loc="upper right", fontsize=25, handlelength=1.0)
+            #=ax.legend(loc="upper right", fontsize=25, handlelength=1.0)=#
             ax.tick_params(labelsize=25)
             ax.text(0.05,
                     0.95,
@@ -576,5 +721,5 @@ RGFlow(
 
 #=@time RealCorr(33, 0896, 0.05:0.025:0.40, -0.0:-0.02:-0.160, 0.; loadData=false)=#
 #=@time MomentumSpecFunc(33, 1500, [0.0, 0.2], [-0., -0.2], 0.0; loadData=false)=#
-#=@time RealSpecFunc(33, 2000, [0.0,], [-0.,], 0.0; loadData=true)=#
-@time RealSpecFunc(33, 2500, [0.0,], [-0., -0.1, -0.14], 0.0; loadData=true)
+@time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.1409, -0.147, -0.152, -0.1535], 0.0; loadData=true)
+#=@time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.12, -0.1409, -0.147, -0.152, -0.1535, -0.16], 0.0; loadData=true)=#

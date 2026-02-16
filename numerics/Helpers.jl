@@ -459,6 +459,18 @@ function Normalise(specFunc, ω; tolerance=1e-4)
     if maximum(specFunc) > tolerance
         norm = abs(sum(specFunc) * (ω[2] - ω[1]))
         specFunc /= norm
+    #=else=#
+    #=    println("Spetral function too small to be normalised: $(maximum(specFunc))")=#
     end
     return specFunc
+end
+
+function impCorr(Wf, U_by_W)
+    #=return minimum((12., abs(Wf) * U_by_W))=#
+    if abs(Wf) > 0.1
+        return abs(abs(Wf) - 0.1) * U_by_W
+    else
+        return 0.
+        #=return maximum((1., abs(abs(Wf) - 0.1) * U_by_W))=#
+    end
 end

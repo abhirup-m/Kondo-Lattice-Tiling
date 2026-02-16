@@ -445,9 +445,8 @@ end
         #=truncatedPoints[k] = filter(p -> true, momentumPoints[k])=#
         truncatedPoints[k] = filter(p -> map1DTo2D(p, size_BZ)[2] ≥ 0, momentumPoints[k])
     end
-    println(sort(diag(hamiltDetails["f"][truncatedPoints["f"], truncatedPoints["f"]])))
 
-    totalSize = length(truncatedPoints["f"]) + 1
+    totalSize = length(truncatedPoints[t1]) + 1
 
     # define Kondo matrix just for the upper half, for both layers
     J = zeros(totalSize)
@@ -470,17 +469,22 @@ end
     J[end] = (sum(diag(hamiltDetails[t2][truncatedPoints[t2], truncatedPoints[t2]]).^2)^0.5) / length(truncatedPoints[t2])
 
     hop_eff = HOP_T
-    hop_step = 2
+    hop_step = 1
     if any(>(0), abs.(diag(hamiltDetails[t1]))) && any(==(0), abs.(diag(hamiltDetails[t1])))
-        println(1)
-        J[indices[1:2:end]] .= [sum([2 * abs(hamiltDetails[t1][k, q] * cos(r * (map1DTo2D(k, size_BZ)[1] - map1DTo2D(q, size_BZ)[1]))) for k in momentumPoints[t1] for q in momentumPoints[t1] if map1DTo2D(k, size_BZ)[1] ≥ 0 && map1DTo2D(q, size_BZ)[1] ≥ 0]) for r in 0:(div(indices[end], 2)-1)]
-        sortseq[indices[1:2:end]] = sortperm(abs.(J[indices[1:2:end]]), rev=true)
+        hop_step = 2
+        #=J[indices[1:2:end]] .= [sum([2 * hamiltDetails[t1][k, q] * cos(r * (map1DTo2D(k, size_BZ)[1] - map1DTo2D(q, size_BZ)[1])) for k in momentumPoints[t1] for q in momentumPoints[t1] if map1DTo2D(k, size_BZ)[1] ≥ 0 && map1DTo2D(q, size_BZ)[1] ≥ 0]) for r in 0:(div(indices[end], 2)-1)]=#
+        J[indices[1:2:end]] .= [sum([2 * hamiltDetails[t1][k, k] * cos(r * (map1DTo2D(k, size_BZ)[1])) for k in momentumPoints[t1] if map1DTo2D(k, size_BZ)[1] ≥ 0]) for r in 0:(div(indices[end], 2)-1)]
+        #=println(J[indices[1:2:end]], maximum(abs.([hamiltDetails[t1][k, q] for k in momentumPoints[t1] for q in momentumPoints[t1]])))=#
+        #=println(2)=#
+        #=@assert false=#
+        #=sortseq[indices[1:2:end]] = sortperm(abs.(J[indices[1:2:end]]), rev=true)=#
         J[indices[2:2:end]] .= J[indices[1:2:end]]
-        sortseq[indices[2:2:end]] = sortperm(abs.(J[indices[2:2:end]]), rev=true)
+        #=sortseq[indices[2:2:end]] = sortperm(abs.(J[indices[2:2:end]]), rev=true)=#
     else
-        J[indices] .= [sum([2 * abs(hamiltDetails[t1][k, k] * cos(r * map1DTo2D(k, size_BZ)[1])) for k in momentumPoints[t1] if map1DTo2D(k, size_BZ)[1] ≥ 0]) for r in 0:(length(indices) - 1)]
-        sortseq[indices] = sortperm(abs.(J[indices]), rev=true)
-        hop_step = 1
+        #=println(1)=#
+        #=@assert false=#
+        J[indices] .= [sum([2 * hamiltDetails[t1][k, k] * cos(r * map1DTo2D(k, size_BZ)[1]) for k in momentumPoints[t1] if map1DTo2D(k, size_BZ)[1] ≥ 0]) for r in 0:(length(indices) - 1)]
+        #=sortseq[indices] = sortperm(abs.(J[indices]), rev=true)=#
     end
 
     J[indices] = J[indices][sortseq]
@@ -492,7 +496,7 @@ end
     hamiltonian = BilayerLEEReal(
                                  J,
                                  hamiltDetails["⟂"],
-                                 1 * hybrid,
+                                 hybrid,
                                  hamiltDetails["η"],
                                  hamiltDetails["impCorr"],
                                  hop_eff,
@@ -521,12 +525,19 @@ end
             continue
         end
         type = v[1]
-        @assert type ∈ ["if", "id"]
-        if type[2:2] == t1
-            specFuncDefDict[k] = Dict()
-            specFuncDefDict[k]["create"] = v[2]
+        @assert type ∈ ["if", "id", "i"]
+        specFuncDef = v[2]
+        if type  == "i" || type == "i$(t1)"
+            if isa(specFuncDef, Function)
+                specFuncDef = specFuncDef(5 + 2 * length(truncatedPoints[t1]))
+            end
+            if isa(specFuncDef, Dict)
+                specFuncDefDict[k] = specFuncDef
+            else
+                specFuncDefDict[k] = Dict("create" => specFuncDef)
+            end
         end
-        if haskey(specFuncDefDict, k)
+        if haskey(specFuncDefDict, k) && !haskey(specFuncDefDict[k], "destroy")
             specFuncDefDict[k]["destroy"] = Dagger(copy(specFuncDefDict[k]["create"]))
         end
     end
@@ -718,7 +729,7 @@ end
                     @assert !haskey(availableResults, k)
                 end
                 if haskey(availableResults, k)
-                    availableResults[k] = vcat.(availableResults[k], v)
+                    availableResults[k] = vcat(availableResults[k], v)
                 else
                     availableResults[k] = v
                 end

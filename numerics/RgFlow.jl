@@ -137,7 +137,7 @@ end
 
         delta = Dict()
         for k in ["f", "d"]
-            delta[k] = (couplings[k][innerIndices[k], cutoffPoints] * GMatrix[k][cutoffPoints, cutoffPoints] * couplings[k][cutoffPoints, innerIndices[k]] .+ W[k] * traceGprime[k] .* WMatrix[innerIndices[k], innerIndices[k]])
+            delta[k] = -deltaEnergy * (couplings[k][innerIndices[k], cutoffPoints] * GMatrix[k][cutoffPoints, cutoffPoints] * couplings[k][cutoffPoints, innerIndices[k]] .- 4 * W[k] * traceGprime[k] .* WMatrix[innerIndices[k], innerIndices[k]])
         end
         delta["⟂"] = 0.5 * (JVector' * GVector)
         if step == 1
