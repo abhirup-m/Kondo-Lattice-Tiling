@@ -73,8 +73,7 @@ function rgFlow(
         ω;
         loadData=false
     )
-    paramKeys = sort(keys(PARAMS))
-    savePath = "saveData/RG-BL-" * join([bareParams[k] for k in paramKeys], "-")
+    savePath = "saveData/RG-BL-$(hash(bareParams))"
     if isfile(savePath) && loadData
         return deserialize(savePath)
     end

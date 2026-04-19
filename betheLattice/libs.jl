@@ -31,32 +31,33 @@ end
 
 
 function RealCorr(
-        Kf,
-        Kd,
-        Wf,
-        Jp,
-        size,
+        params,
         correlationDef,
-        mutInfoDef,
-        states;
+        mutInfoDef;
         loadData=false,
     )
 
-    params = copy(PARAMS)
-    params["Kf"] = Kf
-    params["Kd"] = Kd
-    params["Wf"] = Wf
-    params["J⟂"] = Jp
-    savePath = "saveData/RC-BL-$(size)-$(states)-" * join(["$(params[k])" for k in sort(keys(params))], "-")
+    for (k, v) in filter(p -> !haskey(params, p[1]), PARAMS)
+        params[k] = v
+    end
+    #=params = copy(PARAMS)=#
+    #=params["Kf"] = Kf=#
+    #=params["Kd"] = Kd=#
+    #=params["Wf"] = Wf=#
+    #=params["J⟂"] = Jp=#
+    savePath = "saveData/RC-BL-$(hash(params))"
 
     if loadData && isfile(savePath)
         return deserialize(savePath)
     end
+    #=@assert false=#
     couplingsFlow = rgFlow(
                            params,
                            D -> -D/2;
                            loadData=true
                           )
+    size = params["size"]
+    states = params["states"]
     # ordering:
     # f  d  f1  d1  f2  d2 ...
     layerSpecs = repeat(["f", "d"], size)
@@ -93,7 +94,7 @@ function RealCorr(
                       symmetries=Char['N', 'S'],
                       correlationDefDict=copy(correlationDef),
                       #=mutInfoDefDict=copy(mutInfoDef),=#
-                      silent=false,
+                      silent=true,
                       maxMaxSize=states,
                      )
     impResults = Dict(k => v for (k,v) in results if haskey(correlationDef, k) || haskey(mutInfoDef, k))
@@ -103,16 +104,13 @@ end
 
 
 function RealSpecFunc(
-        Kf,
-        Kd,
-        Wf,
-        Jp,
+        params,
         ω,
-        σ,
-        size,
-        states;
+        σ;
         loadData=false,
     )
+    size = Int(params["size"])
+    states = Int(params["states"])
 
     #=println(couplingsFlow["Jd"][end-10:end])=#
     # ordering:
@@ -121,19 +119,15 @@ function RealSpecFunc(
     inplaneKondo = zeros(size * 2, size * 2)
     indirectKondo = zeros(size * 2, size * 2)
     specFunc = DefineSpecFunc(1., 1., 1.)
-    paramKeys = sort(keys(PARAMS))
-    return @distributed (d1, d2) -> merge(+, d1, d2) for factor in 10 .^ (-1.0:0.1:1.0)
+    return @distributed (d1, d2) -> merge(+, d1, d2) for factor in 10 .^ (-1.0:0.3:1.0)
         SFresults = Dict(k => zeros(length(ω)) for k in keys(specFunc))
-        params = copy(PARAMS)
-        params["Jf"] *= factor
-        params["Jd"] *= factor
-        params["Kf"] = Kf * factor
-        params["Kd"] = Kd * factor
-        params["Wf"] = Wf * factor
-        params["Wd"] *= factor
-        params["J⟂"] = Jp * factor
-        params["bw"] *= factor
-        savePath = "saveData/SF-BL-$(size)-$(states)-" * join([trunc(params[k], digits=10) for k in paramKeys], "-") * ".jld2"
+        for (k, v) in filter(p -> !haskey(params, p[1]), PARAMS)
+            params[k] = v
+        end
+        for k in ["Jf", "Jd", "Kf", "Kd", "Wf", "Wd", "J⟂", "bw"]
+            params[k] *= factor
+        end
+        savePath = "saveData/SF-BL-$(hash(params))"
 
         collectedResults = nothing
         iterCoeffs = Dict(k => Vector{Tuple{Float64, Float64}}[] for k in keys(specFunc))
@@ -147,10 +141,11 @@ function RealSpecFunc(
             steps = length(couplingsFlow["bw"]) .- unique(trunc.(Int, 2 .^ (0:1.0:log2(length(couplingsFlow["bw"]))))) .+ 1
             fFactor = maximum((0., minimum((1, couplingsFlow["Jf"][end]^2 / couplingsFlow["Jf"][1]^2 - 1))))
             dFactor = maximum((0., minimum((1, couplingsFlow["Jd"][end]^2 / couplingsFlow["Jd"][1]^2 - 1))))
-            perpFactor = maximum((0., minimum((1, couplingsFlow["J⟂"][end]^2 / couplingsFlow["J⟂"][1]^2 - 1))))
+            perpFactor = maximum((0., minimum((1, couplingsFlow["J⟂"][end] / couplingsFlow["Jf"][end] - 1))))
             if isnan(perpFactor)
                 perpFactor = 0.
             end
+            println((fFactor, perpFactor))
             specFunc = DefineSpecFunc(fFactor, dFactor, perpFactor)
             collectedResults = [Dict() for _ in steps]
             @showprogress Threads.@threads for (i, step) in collect(enumerate(steps))
@@ -163,12 +158,13 @@ function RealSpecFunc(
                 hybrid[2] = √(params["Vd"] * couplingsFlow["Jd"][step])
                 η = Dict("f" => params["ηf"], "d" => params["ηd"])
                 impCorr = Dict("f" => params["Uf"], "d" => params["Ud"])
-                hop_t = Dict(t => inplaneKondo[i, i] > 0 ? couplingsFlow["bw"][step] : 0. for (i, t) in enumerate(["f", "d"]))
+                hop_t = couplingsFlow["bw"][step]
+                #=hop_t = Dict(t => inplaneKondo[i, i] > 0 ? couplingsFlow["bw"][step] : 0. for (i, t) in enumerate(["f", "d"]))=#
                 hop_step = Dict("f" => 1., "d" => 1.)
                 hamiltonian = BilayerLEEReal(
                                              inplaneKondo,
                                              indirectKondo,
-                                             couplingsFlow["J⟂"][step] / factor,
+                                             couplingsFlow["J⟂"][step], # / factor,
                                              hybrid,
                                              η,
                                              impCorr,

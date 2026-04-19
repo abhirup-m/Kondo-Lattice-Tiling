@@ -1,5 +1,14 @@
-using Distributed, PyPlot
+using Distributed#, PyPlot
+#=using PlotlyLight=#
+#=preset.template.ggplot2!()=#
+using Plots
 include("libs.jl")
+#=const PLOTS_DEFAULTS = Dict(:theme => :wong, :fontfamily => "Computer Modern",=#
+#=    :label => nothing, :dpi => 600=#
+#=)=#
+default(framestyle = :zerolines, thickness_scaling=2)
+theme(:ggplot2)
+scalefontsizes(1.5)
 
 @everywhere RG_TOL = 10^(-5)
 @everywhere PARAMS = Dict(
@@ -44,53 +53,6 @@ function RgRunner()
     savefig("RGF.pdf", bbox_inches="tight")
 end
 #=RgRunner()=#
-
-
-function RealCorrRunner()
-    Kf = -1e-5
-    Kd = -1e-5
-    Wf = -0.0
-    size = 30
-    states = 1000
-    Jp_values = collect(0:0.005:0.3)
-    #=Jp_values = 10 .^ (-2:0.02:-0.4)=#
-    correlationDef = Dict("Sf.Sd" => SpinCorr(1, 3), "Sf.sf" => SpinCorr(1, 5), "Sd.sd" => SpinCorr(3, 7))
-    mutInfoDef = Dict("fd" => ([1, 2], [3, 4]), "Ff" => ([1, 2], [5, 6]))
-    corrResultsArr = Dict(k => 0 .* Jp_values for k in keys(correlationDef))
-    mutInfoResultsArr = Dict(k => 0 .* Jp_values for k in keys(mutInfoDef))
-    fig, ax = plt.subplots()
-    @time Threads.@threads for (i, Jp) in collect(enumerate(Jp_values))
-        results = RealCorr(
-                     Kf,
-                     Kd,
-                     Wf,
-                     Jp,
-                     size,
-                     correlationDef,
-                     mutInfoDef,
-                     states;
-                     loadData=true
-            )
-        for k in keys(correlationDef)
-            corrResultsArr[k][i] = -results[k]
-        end
-        #=for k in keys(mutInfoDef)=#
-        #=    mutInfoResultsArr[k][i] = results[k]=#
-        #=end=#
-    end
-    ax.plot(Jp_values, corrResultsArr["Sf.Sd"], label="-<Sf.Sd>")
-    ax.plot(Jp_values, corrResultsArr["Sf.sf"], label="-<Sf.sf>")
-    ax.plot(Jp_values, corrResultsArr["Sd.sd"], label="-<Sd.sd>")
-    #=ax.plot(Jp_values, mutInfoResultsArr["fd"], label="I2(f:d)")=#
-    #=ax.plot(Jp_values, mutInfoResultsArr["Ff"], label="I2(f:f0)")=#
-    ax.set_xlabel("J_perp")
-    ax.set_ylabel("real-space correlation")
-    #=ax.set_xscale("log")=#
-    ax.legend()
-    fig.savefig("BL-RC-$(size)-$(states).pdf")
-end
-#=RealCorrRunner()=#
-
 
 function PhaseDiagRunner()
     WfValues = sort(-1 .* 10 .^ (-2:0.05:0.0))
@@ -138,30 +100,68 @@ end
 #=PhaseDiagRunner()=#
 
 
+function RealCorrRunner()
+    Kf = -1e-6
+    Kd = -1e-6
+    Wf = -0.0
+    size = 10
+    states = 500
+    Jp_values = collect(0:0.002:0.2)
+    #=Jp_values = 10 .^ (-2:0.02:-0.4)=#
+    correlationDef = Dict("Sf.Sd" => SpinCorr(1, 3), "Sf.sf" => SpinCorr(1, 5), "Sd.sd" => SpinCorr(3, 7))
+    mutInfoDef = Dict("fd" => ([1, 2], [3, 4]), "Ff" => ([1, 2], [5, 6]))
+    corrResultsArr = Dict(k => 0 .* Jp_values for k in keys(correlationDef))
+    mutInfoResultsArr = Dict(k => 0 .* Jp_values for k in keys(mutInfoDef))
+    p = Progress(length(Jp_values))
+    @showprogress Threads.@threads for (i, Jp) in collect(enumerate(Jp_values))
+        params = Dict("Kf" => Kf * Jp, "Kd" => Kd * Jp, "Wf" => Wf, "J⟂" => Jp, "size" => size, "states" => states)
+        results = RealCorr(
+                           params,
+                           correlationDef,
+                           mutInfoDef;
+                           loadData=true
+                          )
+        for k in keys(correlationDef)
+            corrResultsArr[k][i] = -results[k]
+        end
+        next!(p)
+    end
+    finish!(p)
+    p = plot()
+    plot!(p, Jp_values, corrResultsArr["Sf.Sd"], label="-<Sf.Sd>")
+    plot!(p, Jp_values, corrResultsArr["Sf.sf"], label="-<Sf.sf>")
+    plot!(p, Jp_values, corrResultsArr["Sd.sd"], label="-<Sd.sd>")
+    #=ax.plot(Jp_values, mutInfoResultsArr["fd"], label="I2(f:d)")=#
+    #=ax.plot(Jp_values, mutInfoResultsArr["Ff"], label="I2(f:f0)")=#
+    #=ax.set_xlabel("J_perp")=#
+    #=ax.set_ylabel("real-space correlation")=#
+    #=ax.set_xscale("log")=#
+    #=ax.legend()=#
+    Plots.pdf("BL-RC-$(size)-$(states)")
+end
+#=RealCorrRunner()=#
+
+
+
 function SFRunner()
-    size = 31
-    states = 1001
+    size = 11
+    states = 301
     ω = collect(-16:0.1:16)
     σ = 0.1
-    Jp_values = 0.0:0.5:1.0
-    for Wf in [-0.0, -0.2, -0.3] * PARAMS["Jf"]
+    Jp_values = 1.0:1.0:1.0
+    for Wf in [-0.0,] * PARAMS["Jf"]
     #=for Wf in [-0.0, -0.2, -0.3] * PARAMS["Jf"]=#
-        figax1 = plt.subplots()
-        figax2 = plt.subplots()
+        p1 = plot(xlabel="J_perp", ylabel="A(ω)")
+        p2 = plot(xlabel="J_perp", ylabel="A(ω)")
         for (i, Jp) in collect(enumerate(Jp_values))
             Kf = -1e-4 * Jp
             Kd = -1e-4 * Jp
-            println("J⟂=$(Jp), Wf=$(Wf)")
+            params = Dict("Kf" => Kf, "Kd" => Kd, "Wf" => Wf, "J⟂" => Jp, "size" => size, "states" => states)
             results = RealSpecFunc(
-                         Kf,
-                         Kd,
-                         Wf,
-                         Jp,
-                         ω,
-                         σ,
-                         size,
-                         states;
-                         loadData=true,
+                                   params,
+                                   ω,
+                                   σ;
+                                   loadData=false,
                 )
             rm("data-iterdiag"; recursive=true, force=true)
             #=println(results["Ad0"])=#
@@ -169,18 +169,14 @@ function SFRunner()
             #=figax2[2].plot(ω, results["Af0"], label="Af0: Jp=$(Jp)")=#
             #=figax1[2].plot(ω, results["Add"], label="Add: Jp=$(Jp)")=#
             #=figax1[2].plot(ω, results["Ad0"], label="Ad0: Jp=$(Jp)")=#
-            figax1[2].plot(ω, Norm(results["Ad0"] .+ results["Add"], ω), label="Ad: Jp=$(Jp)")
-            figax2[2].plot(ω, Norm(results["Af0"] .+ results["Aff"], ω), label="Af: Jp=$(Jp)")
-            figax2[2].plot(ω, Norm(results["Afd"], ω), label="Afd: Jp=$(Jp)")
+            plot!(p1, ω, results["Ad0"] .+ 0 .* results["Add"], label="Ad: Jp=$(Jp)")
+            plot!(p2, ω, results["Af0"] .+ 0 .* results["Aff"], label="Af: Jp=$(Jp)")
+            plot!(p2, ω, results["Afd"], label="Afd: Jp=$(Jp)")
             #=ax.plot(ω, Norm(results["Ad0"] .+ results["Add"], ω), label="Ad: Jp=$(Jp)")=#
             #=ax.plot(ω, Norm(results["Af0"] .+ results["Aff"], ω), label="Af: Jp=$(Jp)")=#
         end
-        for (t, (fig, ax)) in zip(["d", "f"], [figax1, figax2])
-            ax.set_xlabel("J_perp")
-            ax.set_ylabel("A(ω)")
-            ax.legend()
-            fig.savefig("BL-SF-$(size)-$(states)-$(Wf)-$(t).pdf")
-        end
+        Plots.pdf(p1, "BL-SF-$(size)-$(states)-$(Wf)-d")
+        Plots.pdf(p2, "BL-SF-$(size)-$(states)-$(Wf)-f")
     end
 end
 SFRunner()
