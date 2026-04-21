@@ -123,13 +123,28 @@ function rgFlow(
     return renormalisedParams
 end
 
-function DefineSpecFunc(fFactor, dFactor, perpFactor)
+function DefineSpecFunc()
+    overallFactors = Dict()
+    overallFactors["Jf"] = 1.
+    overallFactors["Jd"] = 1.
+    overallFactors["J⟂"] = 1.
+    return DefineSpecFunc(overallFactors)
+end
+function DefineSpecFunc(overallFactors)
     specFunc = Dict{String, Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}}()
     specFunc["Aff"] = Dict("create" => [("+", [1], 1.0), ("+", [2], 1.0)])
     specFunc["Add"] = Dict("create" => [("+", [3], 1.0), ("+", [4], 1.0)])
-    specFunc["Af0"] = Dict("create" => [("+-+", [1, 2, 6], 0.5 * fFactor), ("+-+", [2, 1, 5], 0.5 * fFactor)])
-    specFunc["Ad0"] = Dict("create" => [("+-+", [3, 4, 8], 0.5 * dFactor), ("+-+", [4, 3, 7], 0.5 * dFactor)])
-    specFunc["Afd"] = Dict("create" => [("+-+", [1, 2, 4], 0.5 * perpFactor), ("+-+", [2, 1, 3], 0.5 * perpFactor)])
+    specFunc["Af0"] = Dict("create" => [("+-+", [2, 1, 5], 0.5 * overallFactors["Jf"]), 
+                                        ("+-+", [2, 1, 3], 0.5 * overallFactors["J⟂"]),
+                                        ("+-+", [1, 2, 6], 0.5 * overallFactors["Jf"]),
+                                        ("+-+", [1, 2, 4], 0.5 * overallFactors["J⟂"]),
+                                       ])
+    specFunc["Ad0"] = Dict("create" => [("+-+", [4, 3, 7], 0.5 * overallFactors["Jd"]),
+                                        ("+-+", [4, 3, 1], 0.5 * overallFactors["J⟂"]),
+                                        ("+-+", [3, 4, 8], 0.5 * overallFactors["Jd"]),
+                                        ("+-+", [3, 4, 2], 0.5 * overallFactors["J⟂"]),
+                                       ])
+    specFunc["Afd"] = Dict("create" => vcat(specFunc["Af0"]["create"], specFunc["Ad0"]["create"]))
     for k in ["Aff", "Add", "Af0", "Ad0", "Afd"]
         specFunc[k]["destroy"] = Dagger(copy(specFunc[k]["create"]))
     end

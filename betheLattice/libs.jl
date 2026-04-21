@@ -50,7 +50,7 @@ function RealCorr(
     if loadData && isfile(savePath)
         return deserialize(savePath)
     end
-    #=@assert false=#
+    # @assert false
     couplingsFlow = rgFlow(
                            params,
                            D -> -D/2;
@@ -60,25 +60,42 @@ function RealCorr(
     states = params["states"]
     # ordering:
     # f  d  f1  d1  f2  d2 ...
+    # if couplingsFlow["Jf"][end] ≥ couplingsFlow["Jf"][1]
+    #     layerSpecs = repeat(["f", "d"], size)
+    #     inplaneKondo = zeros(size * 2, size * 2)
+    #     indirectKondo = zeros(size * 2, size * 2)
+    #     hybrid = zeros(size * 2)
+    # else
+    #     layerSpecs = vcat(repeat(["f"], 3), repeat(["d"], size))
+    #     inplaneKondo = zeros(size + 3, size + 3)
+    #     indirectKondo = zeros(size + 3, size + 3)
+    #     hybrid = zeros(size + 3)
+    # end
     layerSpecs = repeat(["f", "d"], size)
     inplaneKondo = zeros(size * 2, size * 2)
     indirectKondo = zeros(size * 2, size * 2)
+    hybrid = zeros(size * 2)
     inplaneKondo[1, 1] = couplingsFlow["Jf"][end]
     inplaneKondo[2, 2] = couplingsFlow["Jd"][end]
     indirectKondo[1, 1] = couplingsFlow["Kd"][end]
     indirectKondo[2, 2] = couplingsFlow["Kf"][end]
     Jp = couplingsFlow["J⟂"][end]
-    hybrid = zeros(size * 2)
     hybrid[1] = params["Vf"]
     hybrid[2] = params["Vd"]
     η = Dict("f" => params["ηf"], "d" => params["ηd"])
     impCorr = Dict("f" => params["Uf"], "d" => params["Ud"])
     hop_t = params["hop_t"]
     hop_step = Dict("f" => 1., "d" => 1.)
+    heisenberg = Float64[]
+    if couplingsFlow["Jf"][end] < couplingsFlow["Jf"][1]
+        hop_t = Dict("f" => 0., "d" => params["hop_t"])
+        inplaneKondo[1, 1] = 0.
+        heisenberg = repeat([params["hop_t"]^2 / params["Uf"]], size)
+    end
 
     hamiltonian = BilayerLEEReal(
                                  inplaneKondo,
-                                 0 .* indirectKondo,
+                                 indirectKondo,
                                  Jp,
                                  hybrid,
                                  η,
@@ -86,6 +103,7 @@ function RealCorr(
                                  hop_t,
                                  layerSpecs,
                                  hop_step;
+                                 heisenberg=heisenberg,
                                 )
     hamiltonianFamily = MinceHamiltonian(hamiltonian, 8:2:2*(2 + length(layerSpecs)))
     results = IterDiag(
@@ -118,35 +136,43 @@ function RealSpecFunc(
     layerSpecs = repeat(["f", "d"], size)
     inplaneKondo = zeros(size * 2, size * 2)
     indirectKondo = zeros(size * 2, size * 2)
-    specFunc = DefineSpecFunc(1., 1., 1.)
-    return @distributed (d1, d2) -> merge(+, d1, d2) for factor in 10 .^ (-1.0:0.3:1.0)
+    specFunc = DefineSpecFunc()
+    for (k, v) in filter(p -> !haskey(params, p[1]), PARAMS)
+        params[k] = v
+    end
+    return @distributed (d1, d2) -> merge(+, d1, d2) for factor in 10 .^ (1.0:-0.0125:-1.0)
         SFresults = Dict(k => zeros(length(ω)) for k in keys(specFunc))
-        for (k, v) in filter(p -> !haskey(params, p[1]), PARAMS)
-            params[k] = v
-        end
+        factorParams = copy(params)
         for k in ["Jf", "Jd", "Kf", "Kd", "Wf", "Wd", "J⟂", "bw"]
-            params[k] *= factor
+            factorParams[k] *= factor
         end
-        savePath = "saveData/SF-BL-$(hash(params))"
+        savePath = "saveData/SF-BL-$(hash(factorParams))"
 
         collectedResults = nothing
         iterCoeffs = Dict(k => Vector{Tuple{Float64, Float64}}[] for k in keys(specFunc))
         if loadData && isfile(savePath)
             iterCoeffs = deserialize(savePath)
         else
+            #=@assert false=#
             couplingsFlow = rgFlow(
-                                   params,
+                                   factorParams,
                                    D -> -D/2,
                                   )
-            steps = length(couplingsFlow["bw"]) .- unique(trunc.(Int, 2 .^ (0:1.0:log2(length(couplingsFlow["bw"]))))) .+ 1
-            fFactor = maximum((0., minimum((1, couplingsFlow["Jf"][end]^2 / couplingsFlow["Jf"][1]^2 - 1))))
-            dFactor = maximum((0., minimum((1, couplingsFlow["Jd"][end]^2 / couplingsFlow["Jd"][1]^2 - 1))))
-            perpFactor = maximum((0., minimum((1, couplingsFlow["J⟂"][end] / couplingsFlow["Jf"][end] - 1))))
-            if isnan(perpFactor)
-                perpFactor = 0.
+            steps = length(couplingsFlow["bw"]) .- unique(trunc.(Int, 2 .^ (0:0.5:log2(length(couplingsFlow["bw"]))))) .+ 1
+            overallFactors = Dict(t => couplingsFlow[t][end]^2 / couplingsFlow["Jf"][1]^2 - 1 for t in ["Jf", "Jd", "J⟂"])
+            #=fFactor = =#
+            #=dFactor = couplingsFlow["Jd"][end]^2 / couplingsFlow["Jd"][1]^2 - 1=#
+            #=perpFactor = couplingsFlow["J⟂"][end]^2 / couplingsFlow["Jf"][1]^2 - 1=#
+            if isnan(overallFactors["J⟂"])# || (perpFactor < fFactor && perpFactor < dFactor)
+                overallFactors["J⟂"] = 0.
             end
-            println((fFactor, perpFactor))
-            specFunc = DefineSpecFunc(fFactor, dFactor, perpFactor)
+            overallFactors = Dict(k => clamp(v, 0., 1.) for (k,v) in overallFactors)
+            #=fFactor = clamp(fFactor, 0., 1.)=#
+            #=dFactor = clamp(dFactor, 0., 1.)=#
+            #=perpFactor = clamp(perpFactor, 0., 1.)=#
+            println(overallFactors)
+            #=return=#
+            specFunc = DefineSpecFunc(overallFactors)
             collectedResults = [Dict() for _ in steps]
             @showprogress Threads.@threads for (i, step) in collect(enumerate(steps))
                 inplaneKondo[1, 1] = couplingsFlow["Jf"][step]
@@ -154,24 +180,24 @@ function RealSpecFunc(
                 indirectKondo[1, 1] = couplingsFlow["Kd"][step]
                 indirectKondo[2, 2] = couplingsFlow["Kf"][step]
                 hybrid = zeros(size * 2)
-                hybrid[1] = √(params["Vf"] * inplaneKondo[1, 1])
-                hybrid[2] = √(params["Vd"] * couplingsFlow["Jd"][step])
-                η = Dict("f" => params["ηf"], "d" => params["ηd"])
-                impCorr = Dict("f" => params["Uf"], "d" => params["Ud"])
-                hop_t = couplingsFlow["bw"][step]
-                #=hop_t = Dict(t => inplaneKondo[i, i] > 0 ? couplingsFlow["bw"][step] : 0. for (i, t) in enumerate(["f", "d"]))=#
+                hybrid[1] = √(factorParams["Vf"] * inplaneKondo[1, 1])
+                hybrid[2] = √(factorParams["Vd"] * couplingsFlow["Jd"][step])
+                η = Dict("f" => factorParams["ηf"], "d" => factorParams["ηd"])
+                impCorr = Dict("f" => factorParams["Uf"], "d" => factorParams["Ud"])
+                hop_t = Dict("f" => couplingsFlow["bw"][step], "d" => couplingsFlow["bw"][step])
+                # hop_t = Dict(t => inplaneKondo[i, i] > 0 ? couplingsFlow["bw"][step] : 0. for (i, t) in enumerate(["f", "d"]))
                 hop_step = Dict("f" => 1., "d" => 1.)
                 hamiltonian = BilayerLEEReal(
                                              inplaneKondo,
                                              indirectKondo,
-                                             couplingsFlow["J⟂"][step], # / factor,
+                                             couplingsFlow["J⟂"][end] / factor,
                                              hybrid,
                                              η,
                                              impCorr,
                                              hop_t,
                                              layerSpecs,
                                              hop_step;
-                                             globalField=1e-8,
+                                             #=globalField=1e-8,=#
                                             )
                 hamiltonianFamily = MinceHamiltonian(hamiltonian, 8:2:2*(2 + length(layerSpecs)))
                 results = IterDiag(

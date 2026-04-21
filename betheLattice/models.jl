@@ -10,7 +10,7 @@ function BilayerLEEReal(
         hop_step::Dict;
         globalField::Union{Vector{Float64}, Float64}=0.,
         couplingTolerance::Number=1e-15,
-        heisenberg::Dict{String, Vector{Float64}}=Dict{String, Vector{Float64}}(),
+        heisenberg::Vector{Float64}=Float64[],
     )
     #=@assert layerSpecs[1] ≠ layerSpecs[end]=#
     @assert size(J)[1] == size(J)[2] == length(layerSpecs) == length(hybrid)
@@ -115,22 +115,20 @@ function BilayerLEEReal(
             push!(hamiltonian, ("n",  [2 * site], -globalField[site]/2))
         end
     end
-    if length(heisenberg) > 0
-        for (t, imp) in zip(["f", "d"], [1, 2])
-            sites = [[imp]; 2 .+ findall(==(t), layerSpecs)[1:end-1]]
-            for i in 1:(length(sites)-1)
-                if abs(heisenberg[t][i]) < couplingTolerance
-                    continue
-                end
-                j = 2 * sites[i] - 1
-                k = 2 * sites[i+1] - 1
-                push!(hamiltonian, ("nn",  [j, k], heisenberg[t][sites[i]]/4))
-                push!(hamiltonian, ("nn",  [j, k + 1], -heisenberg[t][sites[i]]/4))
-                push!(hamiltonian, ("nn",  [j + 1, k], -heisenberg[t][sites[i]]/4))
-                push!(hamiltonian, ("nn",  [j + 1, k + 1], heisenberg[t][sites[i]]/4))
-                push!(hamiltonian, ("+-+-",  [j, j + 1, k + 1, k], heisenberg[t][sites[i]]/2))
-                push!(hamiltonian, ("+-+-",  [j + 1, j, k, k + 1], heisenberg[t][sites[i]]/2))
+    if !isempty(heisenberg)
+        sites = [[1]; 2 .+ findall(==("f"), layerSpecs)[1:end-1]]
+        for (i, site) in enumerate(sites[1:end-1])
+            if abs(heisenberg[i]) < couplingTolerance
+                continue
             end
+            j = 2 * site - 1
+            k = 2 * sites[i+1] - 1
+            push!(hamiltonian, ("nn",  [j, k], heisenberg[i]/4))
+            push!(hamiltonian, ("nn",  [j, k + 1], -heisenberg[i]/4))
+            push!(hamiltonian, ("nn",  [j + 1, k], -heisenberg[i]/4))
+            push!(hamiltonian, ("nn",  [j + 1, k + 1], heisenberg[i]/4))
+            push!(hamiltonian, ("+-+-",  [j, j + 1, k + 1, k], heisenberg[i]/2))
+            push!(hamiltonian, ("+-+-",  [j + 1, j, k, k + 1], heisenberg[i]/2))
         end
     end
 
