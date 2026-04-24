@@ -188,9 +188,9 @@ function RealSpecFunc(
                 hop_step = Dict("f" => 1., "d" => 1.)
                 hamiltonian = BilayerLEEReal(
                                              inplaneKondo,
-                                             0 .* indirectKondo,
-                                             0 .* couplingsFlow["J⟂"][end] / factor,
-                                             0 .* hybrid,
+                                             indirectKondo,
+                                             couplingsFlow["J⟂"][end] / factor,
+                                             hybrid,
                                              η,
                                              impCorr,
                                              hop_t,

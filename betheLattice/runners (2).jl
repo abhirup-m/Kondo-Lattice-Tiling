@@ -214,14 +214,13 @@ CorrPDRunner();
 function SFRunner()
     size = 11
     states = 1001
-    ω = collect(-9:0.01:9)
-    ω_p = abs.(ω) .< 2
+    ω = collect(-2:0.001:2)
     σ = 0.04
-    Jp_values = [0.0] #, 0.1, 0.3]
-    # for Wf in [-0.0, -0.1, -0.2, -0.3] * PARAMS["Jf"]
-    for Wf in [-0.3,] * PARAMS["Jf"]
-        p1 = plot(xlabel="\$\\omega\$", ylabel="\$A_d(ω)\$")
-        p2 = plot(xlabel="\$\\omega\$", ylabel="\$A_f(ω)\$")
+    Jp_values = [0.0, 0.06, 0.08, 0.3]
+    #=for Wf in [-0.0, -0.1, -0.2, -0.3] * PARAMS["Jf"]=#
+    for Wf in [-0.0,] * PARAMS["Jf"]
+        p1 = plot(xlabel="\$\\omega\$", ylabel="\$A(ω)\$")
+        p2 = plot(xlabel="\$\\omega\$", ylabel="\$A(ω)\$")
         for (i, Jp) in collect(enumerate(Jp_values))
             Kf = -1e-4 * Jp
             Kd = -1e-4 * Jp
@@ -230,26 +229,27 @@ function SFRunner()
                                    params,
                                    ω,
                                    σ;
-                                   loadData=false,
+                                   loadData=true,
                 )
+            rm("data-iterdiag"; recursive=true, force=true)
             #=println(results["Ad0"])=#
             #=figax2[2].plot(ω, results["Aff"], label="Aff: Jp=$(Jp)")=#
             #=figax2[2].plot(ω, results["Af0"], label="Af0: Jp=$(Jp)")=#
             #=figax1[2].plot(ω, results["Add"], label="Add: Jp=$(Jp)")=#
             #=figax1[2].plot(ω, results["Ad0"], label="Ad0: Jp=$(Jp)")=#
-            plot!(p1, ω[ω_p], Norm(results["Ad0"] .+ 0 .* results["Add"], ω)[ω_p], label="\$J_\\perp/J_f=$(round(Jp/PARAMS["Jf"], digits=1))\$")
+            plot!(p1, ω, Norm(results["Ad0"] .+ 0 .* results["Add"], ω), label="\$J_\\perp/J_f=$(round(Jp/PARAMS["Jf"], digits=1))\$")
             #=plot!(p2, ω, results["Afd"] - results["Af0"] - results["Ad0"], label="\$J_\\perp/J_f=$(round(Jp/PARAMS["Jf"], digits=1))\$")=#
-            plot!(p2, ω[ω_p], Norm(results["Af0"] .+ results["Aff"], ω)[ω_p], label="\$J_\\perp/J_f=$(round(Jp/PARAMS["Jf"], digits=1))\$")
+            plot!(p2, ω, Norm(results["Af0"], ω), label="\$J_\\perp/J_f=$(round(Jp/PARAMS["Jf"], digits=1))\$")
             #=plot!(p2, ω, Norm(results["Af0"] .+ 0 .* results["Aff"] .+ 0 .* results["Afd"], ω), label="\$J_\\perp/J_f=$(round(Jp/PARAMS["Jf"], digits=1))\$")=#
             #=plot!(p2, ω, results["Afd"], label="Afd: Jp=$(Jp)")=#
             #=ax.plot(ω, Norm(results["Ad0"] .+ results["Add"], ω), label="Ad: Jp=$(Jp)")=#
             #=ax.plot(ω, Norm(results["Af0"] .+ results["Aff"], ω), label="Af: Jp=$(Jp)")=#
-            Plots.pdf(p1, "BL-SF-$(size)-$(states)-$(Wf)-d")
-            Plots.pdf(p2, "BL-SF-$(size)-$(states)-$(Wf)-f")
         end
+        Plots.pdf(p1, "BL-SF-$(size)-$(states)-$(Wf)-d")
+        Plots.pdf(p2, "BL-SF-$(size)-$(states)-$(Wf)-f")
     end
 end
-SFRunner()
+#=SFRunner()=#
 
 
 ####### TODO
