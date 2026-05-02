@@ -78,8 +78,9 @@ function rgFlow(
         return deserialize(savePath)
     end
     scale = bareParams["scale"]
+    delete!(bareParams, "scale")
     renormalisedParams = Dict(k => [v] for (k,v) in bareParams)
-    #=dos(E) = 1.0=#
+
     dos(E) = 2 * √(bareParams["bw"]^2 - E^2) / (π * bareParams["bw"]^2)
     initDenominators = getDenominators(bareParams, ω)
     flags = Dict(k => 1 for k in keys(initDenominators))
@@ -132,21 +133,50 @@ function DefineSpecFunc()
 end
 function DefineSpecFunc(overallFactors)
     specFunc = Dict{String, Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}}()
-    specFunc["Aff"] = Dict("create" => [("+", [1], 1.0), ("+", [2], 1.0)])
-    specFunc["Add"] = Dict("create" => [("+", [3], 1.0), ("+", [4], 1.0)])
-    specFunc["Af0"] = Dict("create" => [("+-+", [2, 1, 5], 0.5 * overallFactors["Jf"]), 
+    specFunc["Aff"] = Dict("create" => [
+                                        ("+", [1], 1.0),
+                                        ("+", [2], 1.0),
                                         ("+-+", [2, 1, 3], 0.5 * overallFactors["J⟂"]),
-                                        ("+-+", [1, 2, 6], 0.5 * overallFactors["Jf"]),
                                         ("+-+", [1, 2, 4], 0.5 * overallFactors["J⟂"]),
                                        ])
-    specFunc["Ad0"] = Dict("create" => [("+-+", [4, 3, 7], 0.5 * overallFactors["Jd"]),
-                                        ("+-+", [4, 3, 1], 0.5 * overallFactors["J⟂"]),
-                                        ("+-+", [3, 4, 8], 0.5 * overallFactors["Jd"]),
-                                        ("+-+", [3, 4, 2], 0.5 * overallFactors["J⟂"]),
+    specFunc["Add"] = Dict("create" => [
+                                        ("+", [3], 1.0),
+                                        ("+", [4], 1.0)
                                        ])
-    specFunc["Afd"] = Dict("create" => vcat(specFunc["Af0"]["create"], specFunc["Ad0"]["create"]))
-    for k in ["Aff", "Add", "Af0", "Ad0", "Afd"]
-        specFunc[k]["destroy"] = Dagger(copy(specFunc[k]["create"]))
+    specFunc["Af0"] = Dict("create" => [
+                                        ("+-+", [2, 1, 5], 0.5 * overallFactors["Jf"]), 
+                                        ("+-+", [1, 2, 6], 0.5 * overallFactors["Jf"]),
+                                       ])
+    specFunc["Ad0"] = Dict("create" => [
+                                        ("+-+", [4, 3, 7], 0.5 * overallFactors["Jd"]),
+                                        ("+-+", [2, 1, 3], 0.5 * overallFactors["J⟂"]),
+                                        ("+-+", [3, 4, 8], 0.5 * overallFactors["Jd"]),
+                                        ("+-+", [1, 2, 4], 0.5 * overallFactors["J⟂"]),
+                                       ])
+    # specFunc["Afd"] = Dict("create" => vcat(specFunc["Af0"]["create"], specFunc["Ad0"]["create"]))
+    for (k, v) in specFunc
+        specFunc[k]["destroy"] = Dagger(copy(v["create"]))
     end
     return specFunc
+end
+
+function HeightFix(coeffs, ω, height, heightTol, σ)
+    maxIter = 100
+    σ_orig = σ
+    for i in 1:maxIter
+        specFunc = Norm(sum(pmap(vi -> SpecFunc(collect(vi), ω, σ; normalise=false), Iterators.partition(coeffs, 100))), ω)
+        A = specFunc[argmin(abs.(ω))]
+        println((A, height, σ))
+        if abs(A - height) / height < heightTol
+            return specFunc
+        elseif σ < 1e-3
+            break
+        elseif A > height
+            σ *= 1 + abs(A - height) / height
+        else
+            σ *= 1 - abs(A - height) / height
+        end
+    end
+    println("Could not converge")
+    return Norm(sum(pmap(vi -> SpecFunc(collect(vi), ω, σ_orig; normalise=false), Iterators.partition(coeffs, 100))), ω)
 end

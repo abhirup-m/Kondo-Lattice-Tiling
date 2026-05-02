@@ -2,7 +2,7 @@
 @everywhere include("models.jl")
 @everywhere include("helpers.jl")
 
-function getFixedPointData(WfValues, JValues, Kf, Kd; loadData=true)
+function getFixedPointData(WfValues, JValues)
     quants = ["Jf", "Jd", "Kf", "Kd", "J⟂"]
     FixedPoint = Dict(k => zeros(length(WfValues) * length(JValues)) for k in quants)
     bareParams = Dict(k => zeros(length(WfValues) * length(JValues)) for k in quants)
@@ -13,13 +13,14 @@ function getFixedPointData(WfValues, JValues, Kf, Kd; loadData=true)
         params = copy(PARAMS)
         params["J⟂"] = J
         params["Wf"] = Wf
-        params["Kf"] = Kf
-        params["Kd"] = Kd
+        params["Kf"] = -1e-4 * J
+        params["Kd"] = -1e-4 * J
         for g in ("bw", "Jf", "Jd", "Kf", "Kd", "J⟂", "Wf", "Wd")
             params[g] *= params["upFactor"]
         end
+        bareParams = filter(p -> p[1] ∈ ("Jf", "Jd", "Kf", "Kd", "Wf", "Wd", "J⟂", "bw", "scale"), params)
         couplingsFlow = rgFlow(
-                               params,
+                               bareParams,
                                D -> - D/2,
                               )
         for k in quants
@@ -30,7 +31,7 @@ function getFixedPointData(WfValues, JValues, Kf, Kd; loadData=true)
 end
 
 
-function RealCorr(
+@everywhere function RealCorr(
         params,
         correlationDef,
         mutInfoDef;
@@ -50,8 +51,11 @@ function RealCorr(
     if loadData && isfile(savePath)
         return deserialize(savePath)
     end
+    # @assert false
+
+    bareParams = filter(p -> p[1] ∈ ("Jf", "Jd", "Kf", "Kd", "J⟂",  "Wf", "Wd", "bw", "scale"), params)
     couplingsFlow = rgFlow(
-                           params,
+                           bareParams,
                            D -> -D/2;
                            loadData=false,
                           )
@@ -79,19 +83,35 @@ function RealCorr(
     indirectKondo[1, 1] = couplingsFlow["Kd"][end]
     indirectKondo[2, 2] = couplingsFlow["Kf"][end]
     Jp = couplingsFlow["J⟂"][end]
-    hybrid[1] = 0.5 * (couplingsFlow["Jf"][end] * params["Uf"])^0.5
+    hybrid[1] = (0.5 * couplingsFlow["Jf"][end] * params["Uf"])^0.5
+    hybrid[2] = (0.5 * couplingsFlow["Jd"][end] * params["Ud"])^0.5
     η = Dict("f" => params["ηf"], "d" => params["ηd"])
     impCorr = Dict("f" => params["Uf"], "d" => params["Ud"])
     hop_t = Dict("f" => params["hop_t"], "d" => params["hop_t"])
     hop_step = Dict("f" => 1., "d" => 1.)
     heisenberg = zeros(size)
+
     if couplingsFlow["Jf"][end] < couplingsFlow["Jf"][1]
-        inplaneKondo[1, 1] = 0
-        hop_t["f"] = 0.
+        hop_t["f"] *= abs(couplingsFlow["Jf"][end] / couplingsFlow["Jf"][1])
+        hybrid[1] *= abs(couplingsFlow["Jf"][end] / couplingsFlow["Jf"][1])
         indirectKondo[1:2, 1:2] .= 0.
-        hybrid[1] = 0.
-        heisenberg .= params["Jf"]
+        heisenberg .= params["Jf"] * (1 - abs(couplingsFlow["Jf"][end] / couplingsFlow["Jf"][1]))
+        # heisenberg[1] = 8 * params["Vf"]^2 / params["Uf"] * clamp((couplingsFlow["bw"][1] / couplingsFlow["bw"][end])^1.0, 0., 3.0)
     end
+    # hybrid[1] = (couplingsFlow["Jf"][end] * params["Uf"])^0.5
+    # hybrid[2] = (couplingsFlow["Jd"][end] * params["Ud"])^0.5
+    # η = Dict("f" => params["ηf"], "d" => params["ηd"])
+    # impCorr = Dict("f" => params["Uf"], "d" => params["Ud"])
+    # hop_t = Dict("f" => params["hop_t"], "d" => params["hop_t"])
+    # hop_step = Dict("f" => 1., "d" => 1.)
+    # heisenberg = zeros(size)
+    # if couplingsFlow["Jf"][end] < couplingsFlow["Jf"][1]
+    #     hop_t["f"] *= abs(couplingsFlow["bw"][end] / couplingsFlow["bw"][1])
+    #     # indirectKondo[1:2, 1:2] .= 0.
+    #     heisenberg[1] = 8 * params["Vf"]^2 / params["Uf"] * clamp((couplingsFlow["bw"][1] / couplingsFlow["bw"][end])^1.0, 0., 3.0)
+    #     inplaneKondo[1, 1] = 0.
+    #     hybrid[1] = 0
+    # end
 
     hamiltonian = BilayerLEEReal(
                                  inplaneKondo,
@@ -112,16 +132,24 @@ function RealCorr(
     else
         mutInfoDef = Dict{String, NTuple{2, Vector{Int64}}}()
     end
+    if length(correlationDef) == 0
+        correlationDefDict = Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}()
+    else
+        correlationDefDict = copy(correlationDef)
+    end
     results = IterDiag(
                       hamiltonianFamily,
                       states;
                       symmetries=Char['N', 'S'],
-                      correlationDefDict=copy(correlationDef),
+                      correlationDefDict=correlationDefDict,
                       mutInfoDefDict=copy(mutInfoDef),
                       silent=true,
                       maxMaxSize=states,
                      )
     impResults = Dict(k => v for (k,v) in results if haskey(correlationDef, k) || haskey(mutInfoDef, k))
+    if isfile(savePath)
+        impResults = merge(deserialize(savePath), impResults)
+    end
     serialize(savePath, impResults)
     return impResults
 end
@@ -130,7 +158,9 @@ end
 function RealSpecFunc(
         params,
         ω,
-        σ;
+        σ,
+        height,
+        heightTol;
         loadData=false,
     )
     size = Int(params["size"])
@@ -146,8 +176,16 @@ function RealSpecFunc(
     for (k, v) in filter(p -> !haskey(params, p[1]), PARAMS)
         params[k] = v
     end
-    return @showprogress @distributed (d1, d2) -> merge(+, d1, d2) for factor in 10 .^ (0.5:-0.025:-0.5)
-        SFresults = Dict(k => zeros(length(ω)) for k in keys(specFunc))
+
+    bareParams = filter(p -> p[1] ∈ ("Jf", "Jd", "Kf", "Kd", "Wf", "Wd", "J⟂", "bw", "scale"), params)
+    couplingsFlow = rgFlow(
+                           bareParams,
+                           D -> -D/2,
+                          )
+    overallFactors = Dict(t => couplingsFlow[t][end]^2 / couplingsFlow["Jf"][1]^2 - 1 for t in ["Jf", "Jd", "J⟂"])
+
+    SFresults = Dict(k => zeros(length(ω)) for k in keys(specFunc))
+    accumCoeffs = @showprogress @distributed (d1, d2) -> merge(vcat, d1, d2) for factor in 10 .^ (1.3:-0.05:-1.3)
         factorParams = copy(params)
         for k in ["Jf", "Jd", "Kf", "Kd", "Wf", "Wd", "J⟂", "bw"]
             factorParams[k] *= factor
@@ -159,11 +197,13 @@ function RealSpecFunc(
         if loadData && isfile(savePath)
             iterCoeffs = deserialize(savePath)
         else
+            # @assert false
+            bareParams = filter(p -> p[1] ∈ ("Jf", "Jd", "Kf", "Kd", "Wf", "Wd", "J⟂", "bw", "scale"), factorParams)
             couplingsFlow = rgFlow(
                                    factorParams,
                                    D -> -D/2,
                                   )
-            steps = length(couplingsFlow["bw"]) .- unique(trunc.(Int, 2 .^ (0:1.0:log2(length(couplingsFlow["bw"]))))) .+ 1
+            steps = unique(trunc.(Int, 2 .^ (0:1.0:log2(length(couplingsFlow["bw"])))))
             overallFactors = Dict(t => couplingsFlow[t][end]^2 / couplingsFlow["Jf"][1]^2 - 1 for t in ["Jf", "Jd", "J⟂"])
             if isnan(overallFactors["J⟂"])# || (perpFactor < fFactor && perpFactor < dFactor)
                 overallFactors["J⟂"] = 0.
@@ -180,23 +220,30 @@ function RealSpecFunc(
                 indirectKondo[1, 1] = couplingsFlow["Kd"][step]
                 indirectKondo[2, 2] = couplingsFlow["Kf"][step]
                 hybrid = zeros(size * 2)
-                hybrid[1] = √(factorParams["Vf"] * inplaneKondo[1, 1])
-                hybrid[2] = √(factorParams["Vd"] * couplingsFlow["Jd"][step])
+                hybrid[1] = overallFactors["Jf"] * √(factorParams["Vf"] * couplingsFlow["Jf"][step])
+                hybrid[2] = overallFactors["Jd"] * √(factorParams["Vd"] * couplingsFlow["Jd"][step])
                 η = Dict("f" => factorParams["ηf"], "d" => factorParams["ηd"])
                 impCorr = Dict("f" => factorParams["Uf"], "d" => factorParams["Ud"])
+                Jp = couplingsFlow["J⟂"][step] / factor + (couplingsFlow["J⟂"][step] * sum(values(impCorr)) / factor)^0.5
                 hop_t = Dict("f" => couplingsFlow["bw"][step], "d" => couplingsFlow["bw"][step])
                 hop_step = Dict("f" => 1., "d" => 1.)
+                heisenberg = zeros(size)
+                if overallFactors["Jf"] < 1.
+                    hop_t["f"] *= abs(couplingsFlow["Jf"][end] / couplingsFlow["Jf"][1])
+                    indirectKondo[1:2, 1:2] .= 0.
+                    heisenberg .= params["Jf"] * (1 - abs(couplingsFlow["Jf"][end] / couplingsFlow["Jf"][1]))
+                end
                 hamiltonian = BilayerLEEReal(
                                              inplaneKondo,
-                                             0 .* indirectKondo,
-                                             0 .* couplingsFlow["J⟂"][end] / factor,
-                                             0 .* hybrid,
+                                             indirectKondo,
+                                             Jp,
+                                             hybrid,
                                              η,
                                              impCorr,
                                              hop_t,
                                              layerSpecs,
                                              hop_step;
-                                             #=globalField=1e-8,=#
+                                             heisenberg=heisenberg
                                             )
                 hamiltonianFamily = MinceHamiltonian(hamiltonian, 8:2:2*(2 + length(layerSpecs)))
                 results = IterDiag(
@@ -219,10 +266,20 @@ function RealSpecFunc(
             end
             serialize(savePath, iterCoeffs)
         end
-        for (k, v) in copy(iterCoeffs)
-            SFresults[k] = SpecFunc(vcat(v...), ω, σ; normalise=false)#; normalise=true)
-        end
-        SFresults
+        Dict(k => vcat(v...) for (k,v) in iterCoeffs)
     end
-    #=return SFresults=#
+    for (k, v) in accumCoeffs
+        # v = filter(p -> abs(p[1]) > 1e-3, v)
+        if overallFactors["Jf"] ≥ 0 && k == "Af0"
+            println((k, overallFactors["Jf"]))
+            SFresults[k] = overallFactors["Jf"] * HeightFix(v, ω, height * (1 + overallFactors["Jf"]) / overallFactors["Jf"], heightTol, σ[k])
+        else
+            if isempty(v)
+                SFresults[k] = zeros(length(ω))
+            else
+                SFresults[k] = Norm(sum(pmap(vi -> SpecFunc(collect(vi), ω, σ[k]; normalise=false), Iterators.partition(v, 100))), ω)
+            end
+        end
+    end
+    return SFresults
 end

@@ -29,6 +29,8 @@ function BilayerLEEReal(
     # 1,2, 3,4, 5,6, 7,8 ...
     hamiltonian = Tuple{String, Vector{Int64}, Float64}[]
     if abs(Jp) > couplingTolerance
+        Vp = 0 .* (Jp * sum(values(impCorr)))^0.5
+        Jp += Vp
         push!(hamiltonian,
               ("nn",  [1, 3], Jp / 4)
              ) # n_{d up, n_{0 up}
@@ -47,6 +49,10 @@ function BilayerLEEReal(
         push!(hamiltonian,
               ("+-+-",  [2, 1, 3, 4], Jp / 2)
              ) # S_d^- S_0^+
+        # push!(hamiltonian, ("+-", [1, 3], -Vp))
+        # push!(hamiltonian, ("+-", [3, 1], -Vp))
+        # push!(hamiltonian, ("+-", [2, 4], -Vp))
+        # push!(hamiltonian, ("+-", [4, 2], -Vp))
     end
 
     # kondo terms
@@ -89,6 +95,137 @@ function BilayerLEEReal(
             push!(hamiltonian, ("+-",  [bath_j + 1, bath_i + 1], -hop_t[t]))
         end
     end
+
+    for (site, k) in zip([1, 3], ["f", "d"])
+        if abs(η[k]) > couplingTolerance
+            push!(hamiltonian, ("n",  [site], -η[k]))
+            push!(hamiltonian, ("n",  [site + 1], -η[k]))
+        end
+    end
+
+    for (t, imp) in zip(["f", "d"], [1, 3])
+        if abs(impCorr[t]) > couplingTolerance
+            push!(hamiltonian, ("nn",  [imp, imp + 1], impCorr[t]))
+            push!(hamiltonian, ("n",  [imp], -0.5 * impCorr[t]))
+            push!(hamiltonian, ("n",  [imp + 1], -0.5 * impCorr[t]))
+        end
+    end
+
+    # global magnetic field (to lift any trivial degeneracy)
+    for site in 1:(2 + length(layerSpecs))
+        if abs(globalField[site]) > couplingTolerance
+            push!(hamiltonian, ("n",  [2 * site - 1], globalField[site]/2))
+            push!(hamiltonian, ("n",  [2 * site], -globalField[site]/2))
+        end
+    end
+    if !isempty(heisenberg)
+        sites = [[1]; 2 .+ findall(==("f"), layerSpecs)[1:end-1]]
+        for (i, site) in enumerate(sites[1:end-1])
+            if abs(heisenberg[i]) < couplingTolerance
+                continue
+            end
+            j = 2 * site - 1
+            k = 2 * sites[i+1] - 1
+            push!(hamiltonian, ("nn",  [j, k], heisenberg[i]/4))
+            push!(hamiltonian, ("nn",  [j, k + 1], -heisenberg[i]/4))
+            push!(hamiltonian, ("nn",  [j + 1, k], -heisenberg[i]/4))
+            push!(hamiltonian, ("nn",  [j + 1, k + 1], heisenberg[i]/4))
+            push!(hamiltonian, ("+-+-",  [j, j + 1, k + 1, k], heisenberg[i]/2))
+            push!(hamiltonian, ("+-+-",  [j + 1, j, k, k + 1], heisenberg[i]/2))
+        end
+    end
+
+    @assert !isempty(hamiltonian) "Hamiltonian is empty!"
+
+    return hamiltonian
+end
+
+
+function BilayerLEEDirect(
+        Jf::Float64,
+        Kf::Float64,
+        Jp::Float64,
+        hybrid::Float64,
+        η::Dict{String, Float64},
+        impCorr::Dict{String, Float64},
+        hop_t::Union{Float64, Dict{String,Float64}},
+        layerSpecs::Vector{String},
+        hop_step::Dict;
+        globalField::Union{Vector{Float64}, Float64}=0.,
+        couplingTolerance::Number=1e-15,
+        heisenberg::Vector{Float64}=Float64[],
+    )
+    if isa(hop_t, Float64)
+        hop_t = Dict("f" => hop_t, "d" => hop_t)
+    end
+    if isa(globalField, Vector)
+        @assert length(globalField) == length(layerSpecs) + 2
+    else
+        globalField = repeat([globalField], length(layerSpecs) + 2)
+    end
+
+    #### Indexing convention ####
+    # Sf   Sd   γ1   γ2  ...
+    # 1,2, 3,4, 5,6, 7,8 ...
+    hamiltonian = Tuple{String, Vector{Int64}, Float64}[]
+    if abs(Jp) > couplingTolerance
+        push!(hamiltonian,
+              ("nn",  [1, 3], Jp / 4)
+             ) # n_{d up, n_{0 up}
+        push!(hamiltonian,
+              ("nn",  [1, 4], -Jp / 4)
+             ) # n_{d up, n_{0 down}
+        push!(hamiltonian,
+              ("nn",  [2, 3], -Jp / 4)
+             ) # n_{d down, n_{0 up}
+        push!(hamiltonian,
+              ("nn",  [2, 4], Jp / 4)
+             ) # n_{d down, n_{0 down}
+        push!(hamiltonian,
+              ("+-+-",  [1, 2, 4, 3], Jp / 2)
+             ) # S_d^+ S_0^-
+        push!(hamiltonian,
+              ("+-+-",  [2, 1, 3, 4], Jp / 2)
+             ) # S_d^- S_0^+
+    end
+
+    # kondo terms
+    imp = 1
+    bath_i = 3 + 2 * findfirst(==("f"), layerSpecs)
+    for g in [Jf, Kf]
+        if abs(g) > couplingTolerance
+            push!(hamiltonian, ("n+-",  [imp, bath_i, bath_i], g / 4))
+            push!(hamiltonian, ("n+-",  [imp, bath_i + 1, bath_i + 1], -g / 4))
+            push!(hamiltonian, ("n+-",  [imp + 1, bath_i, bath_i], -g / 4))
+            push!(hamiltonian, ("n+-",  [imp + 1, bath_i + 1, bath_i + 1], g / 4))
+            push!(hamiltonian, ("+-+-",  [imp, imp + 1, bath_i + 1, bath_i], g / 2))
+            push!(hamiltonian, ("+-+-",  [imp + 1, imp, bath_i, bath_i + 1], g / 2))
+        end
+    end
+    if abs(hybrid) > couplingTolerance
+        push!(hamiltonian, ("+-",  [imp, bath_i], hybrid)) # n_{d up, n_{0 up}
+        push!(hamiltonian, ("+-",  [imp + 1, bath_i + 1], hybrid)) # n_{d up, n_{0 up}
+        push!(hamiltonian, ("+-",  [bath_i, imp], hybrid)) # n_{d up, n_{0 up}
+        push!(hamiltonian, ("+-",  [bath_i + 1, imp + 1], hybrid)) # n_{d up, n_{0 up}
+    end
+
+    for (i, t) in enumerate(layerSpecs)
+        bath_i = 3 + 2 * i
+        j = findnext(==(t), layerSpecs, i+1)
+        if !isnothing(j)
+            bath_j = 3 + 2 * j
+            push!(hamiltonian, ("+-",  [bath_i, bath_j], -hop_t[t]))
+            push!(hamiltonian, ("+-",  [bath_j, bath_i], -hop_t[t]))
+            push!(hamiltonian, ("+-",  [bath_i + 1, bath_j + 1], -hop_t[t]))
+            push!(hamiltonian, ("+-",  [bath_j + 1, bath_i + 1], -hop_t[t]))
+        end
+    end
+    bath_i = 3
+    bath_j = 3 + 2 * findfirst(==("d"), layerSpecs)
+    push!(hamiltonian, ("+-",  [bath_i, bath_j], -hop_t["d"]))
+    push!(hamiltonian, ("+-",  [bath_j, bath_i], -hop_t["d"]))
+    push!(hamiltonian, ("+-",  [bath_i + 1, bath_j + 1], -hop_t["d"]))
+    push!(hamiltonian, ("+-",  [bath_j + 1, bath_i + 1], -hop_t["d"]))
 
     for (site, k) in zip([1, 3], ["f", "d"])
         if abs(η[k]) > couplingTolerance
