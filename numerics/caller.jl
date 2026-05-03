@@ -10,7 +10,7 @@
 
 ENV["PYCALL_GC_FINALIZE"] = "0"
 using Distributed
-@everywhere using ProgressMeter, PyPlot, LaTeXStrings, PDFmerger
+@everywhere using ProgressMeter, PyPlot, LaTeXStrings
 if "SLURM_SUBMIT_DIR" in keys(ENV)
     addprocs(SlurmManager())
 end
@@ -52,11 +52,7 @@ function RGFlow(
         μ,
         size_BZ::Int64;
         loadData::Bool=false,
-        disabled::Bool=true,
     )
-    if disabled
-        return
-    end
     sparseWf = length(Wf) ≥ 20 ? Wf[1:div(length(Wf), 12):end] : Wf
     sparseJp = length(Jp) ≥ 20 ? Jp[1:div(length(Jp), 12):end] : Jp
     parameters = Iterators.product(Wf, Jp)
@@ -703,23 +699,9 @@ function RealSpecFunc(
     plt.close()
 end
 
-RGFlow(
-     Dict("Jd" => 0.1,
-          "Jf" => 0.1,
-          "Wd_by_Wf" => 0.,
-          "Uf" => 9.,
-          "Ud" => 9.,
-          "μf" => 4.5,
-         ),
-     -0.07:-0.005:-0.15,
-     0:0.01:0.4,
-     [4.5],
-     33;
-     loadData=true,
-     disabled=true,
-    )
+RGFlow(Dict("Jd" => 0.1, "Jf" => 0.1, "Wd_by_Wf" => 0., "Uf" => 9., "Ud" => 9., "μf" => 4.5,), -0.07:-0.005:-0.15, 0:0.01:0.4, [4.5], 13; loadData=false,)
 
 #=@time RealCorr(33, 0896, 0.05:0.025:0.40, -0.0:-0.02:-0.160, 0.; loadData=false)=#
 #=@time MomentumSpecFunc(33, 1500, [0.0, 0.2], [-0., -0.2], 0.0; loadData=false)=#
-@time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.1409, -0.147, -0.152, -0.1535], 0.0; loadData=true)
+#=@time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.1409, -0.147, -0.152, -0.1535], 0.0; loadData=true)=#
 #=@time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.12, -0.1409, -0.147, -0.152, -0.1535, -0.16], 0.0; loadData=true)=#

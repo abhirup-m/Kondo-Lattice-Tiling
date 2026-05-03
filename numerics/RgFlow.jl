@@ -1,4 +1,4 @@
-using LinearAlgebra, JLD2
+using LinearAlgebra
 
 function initialiseKondoJ(
         size_BZ::Int64, 
@@ -85,31 +85,28 @@ end
     # incoming and outgoing momentum indices, while the third dimension stores the 
     # behaviour along the RG flow. For example, J[i][j][k] reveals the value of J 
     # for the momentum pair (i,j) at the k^th Rg step.
-    couplings = Dict("f" => initialiseKondoJ(size_BZ, div(size_BZ + 1, 2), bareCouplings["Jf"]),
-                     "d" => initialiseKondoJ(size_BZ, div(size_BZ + 1, 2), bareCouplings["Jd"]),
-                     "⟂" => bareCouplings["J⟂"],
-                )
-    if couplings["⟂"] == 0
-        couplings["⟂"] = 1e-3
-    end
+    couplings = Dict(k => initialiseKondoJ(size_BZ, div(size_BZ + 1, 2), bareCouplings[k]) for k in ["Jf", "Jd", "Kf", "Kd"])
+    couplings["J⟂"] = bareCouplings["J⟂"]
+    # if couplings["⟂"] == 0
+    #     couplings["⟂"] = 1e-3
+    # end
 
     initSigns = Dict(k => sign.(v) for (k, v) in couplings)
 
     # define flags to track whether the RG flow for a particular J_{k1, k2} needs to be stopped 
     # (perhaps because it has gone to zero, or its denominator has gone to zero). These flags are
     # initialised to one, which means that by default, the RG can proceed for all the momenta.
-    proceedFlags = Dict("f" => fill(true, size_BZ^2, size_BZ^2), "d" => fill(true, size_BZ^2, size_BZ^2), "⟂" => [true])
+    proceedFlags = Dict(k => fill(true, size_BZ^2, size_BZ^2) for k in ["Jf", "Jd", "Kf", "Kd"])
+    proceedFlags["J⟂"] = [true]
 
     # Run the RG flow starting from the maximum energy, down to the penultimate energy (ΔE), in steps of ΔE
 
-    initDeltaSigns = Dict("d" => repeat([1.], size_BZ^2, size_BZ^2),
-                          "f" => repeat([1.], size_BZ^2, size_BZ^2),
-                          "⟂" => 1.
-                         )
-    #=initDeltaSignPerp = 1=#
+    initDeltaSigns = Dict(k=> repeat([1.], size_BZ^2, size_BZ^2) for k in ["Jf", "Jd", "Kf", "Kd"])
+    initDeltaSigns["J⟂"] = 1
 
-    GMatrix = Dict(k => 0 .* couplings[k] for k in ["f", "d"])
+    # GMatrix = Dict(k => 0 .* couplings[k] for k in ["f", "d"])
     WMatrix = 0.5 .* (cos.(kxVals' .- kxVals) .+ cos.(kyVals' .- kyVals))
+
     for (stepIndex, energyCutoff) in enumerate(cutOffEnergies[1:end-1])
         deltaEnergy = abs(cutOffEnergies[stepIndex+1] - cutOffEnergies[stepIndex])
 
@@ -119,50 +116,109 @@ end
         end
 
         innerIndices, cutoffPoints, cutoffHolePoints, proceedFlags = highLowSeparation(dispersionArray, energyCutoff, proceedFlags, size_BZ)
-        GMatrix["f"] .= 0.
-        GMatrix["d"] .= 0.
-        GVector = zeros(length(cutoffPoints))
-        for (i_q, (q, qbar)) in enumerate(zip(cutoffPoints, cutoffHolePoints))
-            for k in ["f", "d"]
-                GMatrix[k][q, q] = densityOfStates[q] * ((1/8) / (omega_by_t * HOP_T - energyCutoff / 2 + μ / 2 + couplings[k][q, q] / 4 + W[k] / 2 + 0.75 * couplings["⟂"]) 
-                                                         + (3/8) / (omega_by_t * HOP_T - energyCutoff / 2 + μ / 2 + couplings[k][q, q] / 4 + W[k] / 2 - 0.25 * couplings["⟂"])
-                                                         + (1/8) / (omega_by_t * HOP_T - energyCutoff / 2 - μ / 2 + couplings[k][qbar, qbar] / 4 + W[k] / 2 + 0.75 * couplings["⟂"]) 
-                                                         + (3/8) / (omega_by_t * HOP_T - energyCutoff / 2 - μ / 2 + couplings[k][qbar, qbar] / 4 + W[k] / 2 - 0.25 * couplings["⟂"])
-                                                        )
-            end
-            GVector[i_q] = sum([densityOfStates[q] / (omega_by_t * HOP_T - 0.5 * (dispersionArray[q] - dispersionArray[qbar]) + couplings[k][q, q] / 2 + W[k] - 0.25 * couplings["⟂"]) for k in ["f", "d"]])
+        G_g = Dict(k => Dict(p => 0 .* couplings["Jf"] for p in ["+", "-"]) for k in ["Jf", "Jd", "Kf", "Kd"])
+        G_aa = Dict(k => 0 .* couplings["Jf"] for k in ["Jf", "Jd", "Kf", "Kd"])
+        G_JK = Dict(k => 0 .* couplings["Jf"] for k in ["f", "d"])
+        di = diagind(couplings["Jf"])[cutoffPoints]
+        for (g, k, kbar) in zip(["Jf", "Jd", "Kf", "Kd"], ["f", "d", "d", "f"], ["d", "f", "f", "d"])
+            G[g]["+"][di] = 1 ./ (omega_by_t * HOP_T - energyCutoff / 2 + couplings[g][di] / 4 + W[k] / 2 + 0.75 * couplings["J⟂"])
+            G[g]["-"][di] = 1 ./ (omega_by_t * HOP_T - energyCutoff / 2 + couplings[g][di] / 4 + W[k] / 2 - 0.25 * couplings["J⟂"])
+            G_aa[g][di] = 1 ./ (omega_by_t * HOP_T - energyCutoff + couplings[g][di] / 2 + W[k] - 0.25 * couplings["J⟂"])
+            G_JK[k][di] = 1 ./ (omega_by_t * HOP_T - energyCutoff / 2 + couplings["J"*k][di] / 4 + couplings["K"*kbar][di] / 4 + W[k] / 2 - 0.25 * couplings["J⟂"])
         end
+        couplingqqbar = Dict(k => zeros(size_BZ^2) for k in ["Jf", "Jd", "Kf", "Kd"])
+        for (q, qbar) in zip(cutoffPoints, cutoffHolePoints)
+            for k in ["Jf", "Jd", "Kf", "Kd"]
+                couplingqqbar[k][q] = couplings[k][q, qbar]
+            end
+        end
+        dos = diagm(densityOfStates[1:size_BZ^2])
+        #=G_inv = Dict(kbar => omega_by_t * HOP_T - energyCutoff / 2 + couplings[k][di[cutoffPoints]] / 4 + W[kbar] / 2 =#
+        #=             for (k, kbar) in zip(["Jf", "Jd", "Kf", "Kd"], ["f", "d", "d", "f"]))=#
+        #=G_JK_inv = Dict(kbar => omega_by_t * HOP_T - energyCutoff / 2 + couplings[J][di[cutoffPoints]] / 4 + couplings[K][di[cutoffPoints]] / 4 + W[kbar] / 2=#
+        #=                for ((J, K), kbar) in zip([("Jf", "Kd"), ("Jd", "Kf")], ["f", "d"]))=#
+        #=G_aa_inv = Dict(kbar => omega_by_t * HOP_T - energyCutoff + couplings[k][di[cutoffPoints]] / 2 + W[kbar] =#
+        #=                for (k, kbar) in zip(["Jf", "Jd", "Kf", "Kd"], ["f", "d", "d", "f"]))=#
+        #=for k in ["Jf", "Jd", "Kf", "Kd"]=#
+        #=    G_1[k][di[cutoffPoints]] = densityOfStates[cutoffPoints] * [0.25 ./ (G_inv[k] + 0.75 * couplings["⟂"]) .+ 0.75 ./ (G_inv[k] - 0.25 * couplings["⟂"])]=#
+        #=    G_2[k][di[cutoffPoints]] = densityOfStates[cutoffPoints] * [0.25 ./ (G_inv[k] + 0.75 * couplings["⟂"]) .+ 0.75 ./ (G_inv[k] - 0.25 * couplings["⟂"])]=#
+        #=    G_alpha_alpha[k][di[cutoffPoints]] = densityOfStates[cutoffPoints] * [0.25 ./ (G_inv[k] + 0.75 * couplings["⟂"]) .+ 0.75 ./ (G_inv[k] - 0.25 * couplings["⟂"])]=#
+        #=end=#
+
+
+
+
+
+        #=for (i_q, q) in enumerate(cutoffPoints)=#
+        #=    G_inv = Dict(kbar => omega_by_t * HOP_T - energyCutoff / 2 + couplings[k][q, q] / 4 + W[kbar] / 2 for (k, kbar) in zip(["Jf", "Jd", "Kf", "Kd"], ["f", "d", "d", "f"]))=#
+        #=    G_JK_inv = Dict(kbar => omega_by_t * HOP_T - energyCutoff / 2 + couplings[J][q, q] / 4 + couplings[K][q, q] / 4 + W[kbar] / 2 for ((J, K), kbar) in zip([("Jf", "Kd"), ("Jd", "Kf")], ["f", "d", "d", "f"]))=#
+        #=    G_aa_inv = Dict(kbar => omega_by_t * HOP_T - energyCutoff + couplings[k][q, q] / 2 + W[kbar] for (k, kbar) in zip(["Jf", "Jd", "Kf", "Kd"], ["f", "d", "d", "f"]))=#
+        #=    for k in ["f", "d"]=#
+        #=        GMatrix[k][q, q] = densityOfStates[q] * ((1/8) / (omega_by_t * HOP_T - energyCutoff / 2 + μ / 2 + couplings[k][q, q] / 4 + W[k] / 2 + 0.75 * couplings["⟂"]) =#
+        #=                                                 + (3/8) / (omega_by_t * HOP_T - energyCutoff / 2 + μ / 2 + couplings[k][q, q] / 4 + W[k] / 2 - 0.25 * couplings["⟂"])=#
+        #=                                                 + (1/8) / (omega_by_t * HOP_T - energyCutoff / 2 - μ / 2 + couplings[k][qbar, qbar] / 4 + W[k] / 2 + 0.75 * couplings["⟂"]) =#
+        #=                                                 + (3/8) / (omega_by_t * HOP_T - energyCutoff / 2 - μ / 2 + couplings[k][qbar, qbar] / 4 + W[k] / 2 - 0.25 * couplings["⟂"])=#
+        #=                                                )=#
+        #=    end=#
+        #=    GVector[i_q] = sum([densityOfStates[q] / (omega_by_t * HOP_T - 0.5 * (dispersionArray[q] - dispersionArray[qbar]) + couplings[k][q, q] / 2 + W[k] - 0.25 * couplings["⟂"]) for k in ["f", "d"]])=#
+        #=end=#
         traceGprime = Dict(k => sum([GMatrix[k][q, q] * couplings[k][q, qbar] for (q,qbar) in zip(cutoffPoints, cutoffHolePoints)]) for k in ["f", "d"])
         JVector = [couplings["f"][q, qbar] * couplings["d"][qbar, q] for (q,qbar) in zip(cutoffPoints, cutoffHolePoints)]
 
         delta = Dict()
-        for k in ["f", "d"]
-            delta[k] = -deltaEnergy * (couplings[k][innerIndices[k], cutoffPoints] * GMatrix[k][cutoffPoints, cutoffPoints] * couplings[k][cutoffPoints, innerIndices[k]] .- 4 * W[k] * traceGprime[k] .* WMatrix[innerIndices[k], innerIndices[k]])
+        for (k, kbar) in zip(("f", "d"), ("d", "f"))
+            Jalpha = "J" * k
+            JalphaBar = "J" * kbar
+            Kalpha = "K" * k
+            KalphaBar = "K" * kbar
+            delta[Jalpha] = -deltaEnergy * (
+                                            couplings[Jalpha][innerIndices[k], cutoffPoints] * dos * (0.25 .* G_g[Jalpha]["+"] .+ 0.75 .* G_g[Jalpha]["-"]) * couplings[Jalpha][cutoffPoints, innerIndices[k]] 
+                                            .- 4 * tr(couplingqqbar[Jalpha] * dos * (0.25 .* G_g[Jalpha]["+"] .+ 0.75 .* G_g[Jalpha]["-"])) * W[k] * WMatrix[innerIndices[k], innerIndices[k]] 
+                                            .- 0.5 * couplings[KalphaBar][innerIndices[k], cutoffPoints] * dos * (G_g[Kalpha]["+"] .+ G_g[Kalpha]["-"]) * couplings[KalphaBar][cutoffPoints, innerIndices[k]] 
+                                            .- 2 * tr(couplingqqbar[KalphaBar] * dos * (G_g[Kalpha]["+"] .+ G_g[Kalpha]["-"])) * W[k] * WMatrix[innerIndices[k], innerIndices[k]]
+                                           )
+            delta[Kalpha] = -deltaEnergy * (
+                                            couplings[Kalpha][innerIndices[kbar], cutoffPoints] * dos * (0.25 .* G_g[KalphaBar]["+"] .+ 0.75 .* G_g[KalphaBar]["-"]) * couplings[Kalpha][cutoffPoints, innerIndices[kbar]] 
+                                            .- 4 * tr(couplingqqbar[Kalpha] * dos * (0.25 .* G_g[KalphaBar]["+"] .+ 0.75 .* G_g[KalphaBar]["-"])) * W[kbar] * WMatrix[innerIndices[k], innerIndices[k]] 
+                                            .- 0.5 * couplings[JalphaBar][innerIndices[kbar], cutoffPoints] * dos * (G_g[Jalphabar]["+"] .+ G_g[JalphaBar]["-"]) * couplings[JalphaBar][cutoffPoints, innerIndices[kbar]] 
+                                            .- 2 * tr(couplingqqbar[JalphaBar] * dos * (G_g[Jalphabar]["+"] .+ G_g[JalphaBar]["-"])) * W[kbar] * WMatrix[innerIndices[k], innerIndices[k]] 
+                                           )
         end
-        delta["⟂"] = 0.5 * (JVector' * GVector)
+        delta["J⟂"] = 0 
+        delta["J⟂"] += -0.25 * (1 / size_BZ^2) * tr(dos * couplings["Jf"][innerIndices["f"], cutoffPoints] * dos * (G_g["Jf"]["+"] .+ G_g["Jf"]["-"]) * couplings["Jf"][cutoffPoints, innerIndices["f"]])
+        delta["J⟂"] += -0.25 * (1 / size_BZ^2) * tr(dos * couplings["Jd"][innerIndices["d"], cutoffPoints] * dos * (G_g["Jd"]["+"] .+ G_g["Jd"]["-"]) * couplings["Jd"][cutoffPoints, innerIndices["d"]])
+        delta["J⟂"] += -0.25 * (1 / size_BZ^2) * tr(dos * couplings["Kf"][innerIndices["f"], cutoffPoints] * dos * (G_g["Kd"]["+"] .+ G_g["Kd"]["-"]) * couplings["Kf"][cutoffPoints, innerIndices["f"]])
+        delta["J⟂"] += -0.25 * (1 / size_BZ^2) * tr(dos * couplings["Kd"][innerIndices["d"], cutoffPoints] * dos * (G_g["Kf"]["+"] .+ G_g["Kf"]["-"]) * couplings["Kd"][cutoffPoints, innerIndices["d"]])
+        delta["J⟂"] += (1 / size_BZ^2) * tr(dos * couplings["Jf"][innerIndices["f"], cutoffPoints] * dos * G_JK["f"] * couplings["Kd"][cutoffPoints, innerIndices["d"]])
+        delta["J⟂"] += (1 / size_BZ^2) * tr(dos * couplings["Jd"][innerIndices["d"], cutoffPoints] * dos * G_JK["d"] * couplings["Kf"][cutoffPoints, innerIndices["f"]])
+        delta["J⟂"] += 0.5 * tr(dos * couplingqqbar["Jf"] * (G_aa["Jf"] + G_aa["Jd"]) * couplingqqbar["Jd"])
+        delta["J⟂"] += 0.5 * tr(dos * couplingqqbar["Kf"] * (G_aa["Kf"] + G_aa["Kd"]) * couplingqqbar["Kd"])
+        #=delta["⟂"] = 0.5 * (JVector' * GVector)=#
         if step == 1
-            initDeltaSigns["f"] = sign.(delta["f"])
-            initDeltaSigns["d"] = sign.(delta["d"])
-            initDeltaSigns["⟂"] = sign(delta["⟂"])
+            initDeltaSigns["Jf"] = sign.(delta["Jf"])
+            initDeltaSigns["Jd"] = sign.(delta["Jd"])
+            initDeltaSigns["Kf"] = sign.(delta["Kf"])
+            initDeltaSigns["Kd"] = sign.(delta["Kd"])
+            initDeltaSigns["J⟂"] = sign(delta["J⟂"])
         else
-            for k in ["f", "d"]
-                initDeltaSigns[k][innerIndices[k], innerIndices[k]][sign.(delta[k]) .* initDeltaSigns[k][innerIndices[k], innerIndices[k]] .< 0] .= 0.
-                delta[k][initDeltaSigns[k][innerIndices[k], innerIndices[k]] .== 0] .= 0.
+            for (g, k) in zip(["Jf", "Jd", "Kf", "Kd"], ["f", "d", "d", "f"])
+                initDeltaSigns[g][innerIndices[k], innerIndices[k]][sign.(delta[g]) .* initDeltaSigns[g][innerIndices[k], innerIndices[k]] .< 0] .= 0.
+                delta[g][initDeltaSigns[k][innerIndices[k], innerIndices[k]] .== 0] .= 0.
             end
-            if sign(delta["⟂"]) * initDeltaSigns["⟂"] < 0
-                initDeltaSigns["⟂"] = 0.
-                delta["⟂"] = 0.
+            if sign(delta["J⟂"]) * initDeltaSigns["J⟂"] < 0
+                initDeltaSigns["J⟂"] = 0.
+                delta["J⟂"] = 0.
             end
         end
-        for k in ["f", "d"]
-            couplings[k][innerIndices[k], innerIndices[k]] .+= delta[k]
-            proceedFlags[k][innerIndices[k], innerIndices[k]] .= couplings[k][innerIndices[k], innerIndices[k]] .* initSigns[k][innerIndices[k], innerIndices[k]] .≤ 0
-            couplings[k][sign.(couplings[k]) .* initSigns[k] .< 0] .= 0.
+        for (g, k) in zip(["Jf", "Jd", "Kf", "Kd"], ["f", "d", "d", "f"])
+            couplings[g][innerIndices[k], innerIndices[k]] .+= delta[g]
+            proceedFlags[g][innerIndices[k], innerIndices[k]] .= couplings[g][innerIndices[k], innerIndices[k]] .* initSigns[g][innerIndices[k], innerIndices[k]] .≤ 0
+            couplings[g][sign.(couplings[g]) .* initSigns[g] .< 0] .= 0.
         end
-        couplings["⟂"] += delta["⟂"]
-        if sign(couplings["⟂"]) * initSigns["⟂"] < 0
-            proceedFlags["⟂"] = [false]
-            couplings["⟂"] = 0.
+        couplings["J⟂"] += delta["J⟂"]
+        if sign(couplings["J⟂"]) * initSigns["J⟂"] < 0
+            proceedFlags["J⟂"] = [false]
+            couplings["J⟂"] = 0.
         end
     end
     if saveData
