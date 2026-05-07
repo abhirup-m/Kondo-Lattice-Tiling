@@ -2,24 +2,6 @@ using Distributed, PyPlot
 plt.style.use("ggplot")
 rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
 rcParams["font.size"] = 20
-# plt.style.use("seaborn-v0_8")
-#=using PlotlyLight=#
-#=preset.template.ggplot2!()=#
-# using CairoMakie, Measures, Foresight, MakiePublication, MakieThemes
-# foresight() |> Makie.set_theme!
-# theme_ggthemr(:fresh) |> Makie.set_theme!
-# update_theme!(fontsize=20, figure_padding = 0, xlabelsize=40)
-# update_theme!(Axis = (
-#     xgridvisible = false,
-#     ygridvisible = false,
-#     xlabelsize = 20,
-#     ylabelsize = 20,
-#     leftspinevisible=true,
-#     bottomspinevisible=true
-# ))
-# update_theme!(Lines = (
-#                        linewidth=2,
-#    ))
 include("libs.jl")
 
 @everywhere RG_TOL = 10^(-5)
@@ -33,7 +15,7 @@ include("libs.jl")
               "Kd" => nothing,
               "Vf" => 1.,
               "Vd" => 0.1,
-              "Uf" => 10.,
+              "Uf" => 15.,
               "Ud" => 0.,
               "ηf" => 0.,
               "ηd" => 0.,
@@ -152,18 +134,19 @@ end
 function I2Runner()
     Kf = -1e-4
     Kd = -1e-4
-    size = 11
-    states = 2099
-    Jp_values = 10 .^ (-2.0:0.2:0.5)
+    size = 31
+    states = 799
+    Jp_values = 10 .^ (-2.0:0.3:1.0)
     correlationDef = Dict()
     # mutInfoDef = Dict() 
-    mutInfoDef = Dict("f-d" => sites -> ([1,2],[3,4]))
+    mutInfoDef = Dict("f0-d0" => sites -> ([5,6],[7,8]))
+    # mutInfoDef = Dict("f-d" => sites -> ([1,2],[3,4]))
     mutInfoResultsArr = Dict(k => 0 .* Jp_values for k in keys(mutInfoDef))
     fig, ax = plt.subplots()
     for Wf in -[0.0, 0.3] .* PARAMS["Jf"]
         p = Progress(length(Jp_values))
         Threads.@threads for (i, Jp) in collect(enumerate(Jp_values))
-            params = Dict("Kf" => Kf * Jp, "Kd" => Kd * Jp, "Wf" => Wf, "J⟂" => Jp, "size" => size, "states" => states, "Uf" => abs(Wf * PARAMS["Uf_by_Wf"]))
+            params = Dict("Kf" => Kf * Jp, "Kd" => Kd * Jp, "Wf" => Wf, "J⟂" => Jp, "size" => size, "states" => states)
             results = RealCorr(
                                params,
                                correlationDef,
@@ -176,15 +159,15 @@ function I2Runner()
             next!(p)
         end
         finish!(p)
-        ax.plot(Jp_values ./ PARAMS["Jf"], mutInfoResultsArr["f-d"], marker="o", label=L"W_f/J_f=%$(round(Wf, digits=2))")
+        ax.plot(Jp_values ./ PARAMS["Jf"], mutInfoResultsArr["f0-d0"], marker="o", label=L"W_f/J_f=%$(round(Wf, digits=2))")
     end
     ax.set_xlabel(L"J_\perp/J_f")
-    ax.set_ylabel(L"I_2(d:f)")
+    ax.set_ylabel(L"I_2(d0:f0)")
     ax.legend()
     ax.set_xscale("log")
-    plt.savefig("BL-I2-$(size)-$(states)-$(keys(mutInfoResultsArr) |> first).pdf", bbox_inches="tight")
+    plt.savefig("BL-I2-$(size)-$(states)-$(mutInfoResultsArr |> keys |> first).pdf", bbox_inches="tight")
 end
-# I2Runner()
+I2Runner()
 
 
 function I3Runner()
@@ -282,61 +265,12 @@ function CorrPDRunner()
     ax.set_ylabel("\$J_\\perp\$")
     plt.savefig("BL-RCPD-$(size)-$(states).pdf", bbox_inches="tight")
 end
-CorrPDRunner()
-
-function CorrPDRunner()
-    Kf = -1e-4
-    Kd = -1e-4
-    size = 9
-    states = 501
-    Jp_values = 10 .^ (-2.0:0.1:0)
-    Wf_values = -(10 .^ (-2.0:0.1:-0)) .* PARAMS["Jf"]
-    correlationDef = Dict("Sf.Sd" => SpinCorr(1, 3, 3), "Sf.sf" => SpinCorr(1, 5, 5), "Sd.sd" => SpinCorr(3, 7, 7), "t_ff0" => [("+-", [1, 5], 1.0), ("+-", [5, 1], 1.0), ("+-", [2, 6], 1.0), ("+-", [6, 2], 1.0),])
-    mutInfoDef = Dict() 
-    PD1 = zeros(length(Jp_values), length(Wf_values))
-    PD2 = zeros(length(Jp_values), length(Wf_values))
-    PD3 = zeros(length(Jp_values), length(Wf_values))
-    p = Progress(length(Jp_values) * length(Wf_values))
-    Threads.@threads for ((i, Wf), (j, Jp)) in collect(Iterators.product(enumerate(Wf_values), enumerate(Jp_values)))
-        params = Dict("Kf" => Kf * Jp, "Kd" => Kd * Jp, "Wf" => Wf, "J⟂" => Jp, "size" => size, "states" => states, "Uf" => 10.)
-        results = RealCorr(
-                           params,
-                           correlationDef,
-                           mutInfoDef;
-                           loadData=false,
-                          )
-        PD1[j, i] = -results["t_ff0"]
-        PD2[j, i] = -results["Sf.sf"]
-        PD3[j, i] = -results["Sf.Sd"]
-        next!(p)
-    end
-    finish!(p)
-    maps = ["GnBu", "RdPu", "plasma"]
-    fig, ax = plt.subplots()
-    params = [[], [], []]
-    vals = [[], [], []]
-    @time for ((i, Wf), (j, Jp)) in Iterators.product(enumerate(Wf_values), enumerate(Jp_values))
-        max = argmax([PD1[j, i], PD2[j, i], PD3[j, i]])
-        push!(params[max], (-Wf / PARAMS["Jf"], Jp / PARAMS["Jf"]))
-        push!(vals[max], maximum([PD1[j, i], PD2[j, i], PD3[j, i]]))
-    end
-    for (i, (title, loc, marker)) in enumerate(zip(["\$\\sum_\\sigma\\langle f^\\dagger_\\sigma f^\\dagger_{0,\\sigma} + \\text{h.c.}\\rangle\$", "\$\\langle S_f \\cdot S_{f0}\\rangle\$", "\$\\langle S_f\\cdot S_d\\rangle\$"], ["left", "right", "top"], ["s", "s", "s"]))
-        sc = ax.scatter(params[i] .|> first, params[i] .|> last, c=vals[i], cmap=maps[i], marker=marker)
-        cb = fig.colorbar(sc, ax=ax, location=loc, fraction=(loc == "left" ? 0.04 : 0.06), pad=(loc=="left" ? 0.15 : 0.05))
-        cb.set_label(title)
-    end
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("\$-W_f/J_f\$")
-    ax.set_ylabel("\$J_\\perp\$")
-    plt.savefig("BL-RCPD-$(size)-$(states).pdf", bbox_inches="tight")
-end
 # CorrPDRunner()
 
 function SFRunner()
     size = 11
-    states = 517
-    ω = collect(-10:0.001:10)
+    states = 602
+    ω = collect(-15:0.01:15)
     ω_p = -0.1 .< ω .< 2
     σ = Dict(
              "Add" => 0.5,
@@ -345,8 +279,8 @@ function SFRunner()
              "Af0" => 0.1,
              "Afd" => 0.04
             )
-    Jp_values = [0.0, 0.1, 0.3]
-    for Wf in -[0.2, 0.3,] * PARAMS["Jf"]
+    Jp_values = [0.0, 0.1, 0.4]
+    for Wf in -[0.2, 0.3] * PARAMS["Jf"]
         fig, ax = plt.subplots(ncols=2, figsize=(14, 6), dpi=600)
         insets = []
         for (t, axi) in zip(["d", "f"], ax)
@@ -362,9 +296,16 @@ function SFRunner()
         for (i, Jp) in collect(enumerate(Jp_values))
             Kf = -1e-4 * Jp
             Kd = -1e-4 * Jp
-            params = Dict("Kf" => Kf, "Kd" => Kd, "Wf" => Wf, "J⟂" => Jp, "size" => size, "states" => states)
+            params = Dict(
+                          "Kf" => Kf,
+                          "Kd" => Kd,
+                          "Wf" => Wf,
+                          "J⟂" => Jp,
+                          "size" => size,
+                          "states" => Jp == 0 ? states : 2 * states
+                         )
 
-            height = 0.5
+            height = 0.6
             heightTol = 1e-3
             results = RealSpecFunc(
                                    params,
@@ -372,7 +313,7 @@ function SFRunner()
                                    σ,
                                    height,
                                    heightTol;
-                                   loadData=false,
+                                   loadData=true,
                 )
             ax[1].plot(ω, Norm(results["Ad0"] .+ results["Add"], ω), label=L"J_\perp/J_f=%$(round(Jp/PARAMS[\"Jf\"], digits=1))")
             ax[2].plot(ω, Norm(results["Af0"] + results["Aff"], ω), label=L"J_\perp/J_f=%$(round(Jp/PARAMS[\"Jf\"], digits=1))")

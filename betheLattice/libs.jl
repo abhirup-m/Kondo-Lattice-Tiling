@@ -231,6 +231,8 @@ function RealSpecFunc(
                 if overallFactors["Jf"] < 1.
                     hop_t["f"] *= abs(couplingsFlow["Jf"][end] / couplingsFlow["Jf"][1])
                     indirectKondo[1:2, 1:2] .= 0.
+                    inplaneKondo[1, 1] = 0.
+                    hybrid[1] = 0.
                     heisenberg .= params["Jf"] * (1 - abs(couplingsFlow["Jf"][end] / couplingsFlow["Jf"][1]))
                 end
                 hamiltonian = BilayerLEEReal(
@@ -271,7 +273,7 @@ function RealSpecFunc(
     for (k, v) in accumCoeffs
         # v = filter(p -> abs(p[1]) > 1e-3, v)
         if overallFactors["Jf"] ≥ 0 && k == "Af0"
-            println((k, overallFactors["Jf"]))
+            println((k, overallFactors["Jf"], length(v)))
             SFresults[k] = overallFactors["Jf"] * HeightFix(v, ω, height * (1 + overallFactors["Jf"]) / overallFactors["Jf"], heightTol, σ[k])
         else
             if isempty(v)

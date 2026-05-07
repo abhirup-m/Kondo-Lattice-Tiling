@@ -163,6 +163,7 @@ end
 function HeightFix(coeffs, ω, height, heightTol, σ)
     maxIter = 100
     σ_orig = σ
+    specFunc = collect(0 .* ω)
     for i in 1:maxIter
         specFunc = Norm(sum(pmap(vi -> SpecFunc(collect(vi), ω, σ; normalise=false), Iterators.partition(coeffs, 100))), ω)
         A = specFunc[argmin(abs.(ω))]
@@ -178,5 +179,5 @@ function HeightFix(coeffs, ω, height, heightTol, σ)
         end
     end
     println("Could not converge")
-    return Norm(sum(pmap(vi -> SpecFunc(collect(vi), ω, σ_orig; normalise=false), Iterators.partition(coeffs, 100))), ω)
+    return 0 .* specFunc
 end

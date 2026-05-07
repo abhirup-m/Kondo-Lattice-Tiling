@@ -1,102 +1,165 @@
-#!/bin/env julia-beta
-#SBATCH --job-name=SC25                     # Job name
-#SBATCH --output=job.%J.out                    # Standard output file
-#SBATCH --error=job.%J.err                     # Standard error file
-#SBATCH --partition=hm                         # Partition or queue name
-#SBATCH --nodes=3                              # Number of nodes
-#SBATCH --ntasks-per-node=48                   # Number of tasks per node
-#SBATCH --ntasks=144                           # Total Number of tasks
-#SBATCH --time=24:00:00                        # Maximum runtime (D-HH:MM:SS)
+using Distributed, PyPlot, LaTeXStrings
+@everywhere using ProgressMeter
+plt.style.use("ggplot")
+rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+rcParams["font.size"] = 20
+@everywhere include("Constants.jl")
+@everywhere include("Helpers.jl")
+@everywhere include("RgFlow.jl")
+@everywhere include("Models.jl")
+# @everywhere include("PhaseDiagram.jl")
+@everywhere include("Probes.jl")
+# @everywhere include("PltStyle.jl")
 
-ENV["PYCALL_GC_FINALIZE"] = "0"
-using Distributed
-@everywhere using ProgressMeter, PyPlot, LaTeXStrings
-if "SLURM_SUBMIT_DIR" in keys(ENV)
-    addprocs(SlurmManager())
-end
-
-@everywhere submitDir = pwd() * "/"
-@everywhere if "SLURM_SUBMIT_DIR" in keys(ENV)
-    submitDir = ENV["SLURM_SUBMIT_DIR"] * "/"
-end
-
-@everywhere include(submitDir * "Constants.jl")
-@everywhere include(submitDir * "Helpers.jl")
-@everywhere include(submitDir * "RgFlow.jl")
-@everywhere include(submitDir * "Models.jl")
-@everywhere include(submitDir * "PhaseDiagram.jl")
-@everywhere include(submitDir * "Probes.jl")
-@everywhere include(submitDir * "PltStyle.jl")
-
-@everywhere function insertCouplings(couplings, Wf, J)
-    couplings["Wf"] = Wf
-    couplings["J⟂"] = J
-    couplings["omega_by_t"] = OMEGA_BY_t
-    return couplings
-end
-
-@everywhere const COUPLINGS = Dict("omega_by_t" => -2.,
-                                   "Ud" => 4.0,
-                                   "Uf" => 8.0,
-                                   "Jf" => 0.2,
-                                   "Jd" => 0.1,
-                                   "Wd" => -0.0,
-                                   "ηf" => 0.,
-                                   "U_by_W" => 200.,
-                    )
+@everywhere const COUPLINGS = Dict(
+              "bw" => 1.0,
+              "Jf" => 0.1,
+              "Jd" => 0.1,
+              "Wd" => -0.0,
+              "Vf" => 1.,
+              "Vd" => 0.1,
+              "Uf" => 10.,
+              "Ud" => 0.,
+              "ηf" => 0.,
+              "ηd" => 0.,
+              "hop_t" => 0.1,
+              "omega_by_t" => -2.
+             )
+# @everywhere const COUPLINGS = Dict("omega_by_t" => -2.,
+#                                    "Ud" => 4.0,
+#                                    "Uf" => 8.0,
+#                                    "Jf" => 0.2,
+#                                    "Jd" => 0.1,
+#                                    "Wd" => -0.0,
+#                                    "ηf" => 0.,
+#                                    "U_by_W" => 200.,
+#                     )
 
 function RGFlow(
-        couplings::Dict,
-        Wf,
-        Jp,
-        μ,
+        Wf_vals,
+        Jp_vals,
         size_BZ::Int64;
         loadData::Bool=false,
     )
-    sparseWf = length(Wf) ≥ 20 ? Wf[1:div(length(Wf), 12):end] : Wf
-    sparseJp = length(Jp) ≥ 20 ? Jp[1:div(length(Jp), 12):end] : Jp
-    parameters = Iterators.product(Wf, Jp)
+    parameters = Iterators.product(Wf_vals, Jp_vals)
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
     FSpoints = getIsoEngCont(dispersion, 0.0)
-    fig, axes = subplots(ncols=3, nrows=length(μ), figsize=(18, 3.5 * length(μ)))
-    fig.tight_layout()
-    boolTitles = Dict("f" => L"Pole fraction: $J_f$", "d" => L"Pole fraction: $J_d$", "⟂" => L"Rel/Irrelevance: $J_\perp$")
-    for (j, μ_i) in enumerate(μ)
-        results = @showprogress desc="rg flow" pmap(p -> momentumSpaceRG(size_BZ, insertWfJ(couplings, p[1], p[2], μ_i); loadData=loadData), parameters)
-        for (i, key) in enumerate(["f", "d", "⟂"])
-            ax = length(μ) > 1 ? axes[j, i] : axes[i]
-            fgLabel = L"\mathrm{FS~frac.~(FG)}" 
-            if key == "f" || key == "d"
-                keyData = [sum(diag(abs.(r[key])[FSpoints, FSpoints])) for r in results]
-                boolData = [count(>(1e-3), abs.(diag(r[key][FSpoints, FSpoints]))) / length(FSpoints) for r in results]
-            else
-                keyData = [r[key] for r in results]
-                boolData = [ifelse(r[key]/J > 0.8, 1, ifelse(r[key]/J > 0., 0.5, 0)) for (r, (Wf, J)) in zip(results, Iterators.product(Wf, Jp))]
-                fgLabel = L"$g^* > 0?~$(FG)" 
-            end
-            hm = ax.imshow(reshape(keyData, length(Wf), length(Jp)), origin="lower", extent=(extrema(Jp)..., extrema(-Wf)...), cmap=CMAP, aspect="auto")
-            sparseColors = [b for (b, (Wfi, Ji)) in zip(boolData, parameters) if Wfi ∈ sparseWf && Ji ∈ sparseJp] # map(p -> ifelse(p[2][1] ∈ sparseWf && p[2][2] ∈ sparseJ, p[1], nothing), zip(boolData, parameters))
-            sparseX = [Ji for (Wfi, Ji) in parameters if Wfi ∈ sparseWf && Ji ∈ sparseJp]
-            sparseY = [-Wfi for (Wfi, Ji) in parameters if Wfi ∈ sparseWf && Ji ∈ sparseJp]
-            sc = ax.scatter(sparseX, sparseY, c=sparseColors, s=10, cmap=CMAP, alpha=0.8)
-            #=sc.set_facecolor("none")=#
-            #=sc.set_edgecolor("black")=#
-            ax.set_xlabel(L"$J_\perp$")
-            ax.set_ylabel(L"$|Wf|$")
-            if j == 1
-                ax.set_title(L"RG flow of $J_%$(key)$", pad=10)
-            end
-            #=if i == 1=#
-            #=    phAssymetry = round(μ_i - couplings["Ud"]/2, digits=3)=#
-            #=    ax.text(-1.2, 0.5, L"$\eta_d=%$(phAssymetry)$", horizontalalignment="center", verticalalignment="center", transform=ax.transAxes)=#
-            #=end=#
-            ax.set_aspect((maximum(Jp) - minimum(Jp)) / (maximum(-Wf) - minimum(-Wf)))
-            fig.colorbar(hm, shrink=0.5, pad=-1.1, label=L"$g^*~$(BG)", format=matplotlib.ticker.FormatStrFormatter("%.2f"))
-            fig.colorbar(sc, location="left", shrink=0.5, pad=0.09, label=fgLabel,)
-        end
+    results = @showprogress @distributed vcat for p in collect(parameters)
+        r = momentumSpaceRG(merge(COUPLINGS, Dict("J⟂" => p[2], "Wf" => p[1], "Kf" => -1e-5 * p[2], "Kd" => -1e-5 * p[2], "size_BZ" => size_BZ)); loadData=loadData)
+        [r]
     end
+    for (i, key) in enumerate(["Jf", "J⟂"])
+        fgLabel = L"\mathrm{FS~frac.~(FG)}" 
+        if key == "Jf" || key == "Jd"
+            fig, ax = subplots(figsize=(7, 3.5))
+            scData = [count(>(1e-3), diag(abs.(r[key])[FSpoints, FSpoints])) / length(FSpoints) for r in results]
+            println(COUPLINGS["Jf"])
+            keyData = [maximum([sum(abs.(r[key][p, FSpoints])) for p in FSpoints]) for r in results]
+            # println(maximum(keyData))
+            x = [Jp ./ COUPLINGS["Jf"] for Jp in Jp_vals for Wf in Wf_vals]
+            y = [-Wf ./ COUPLINGS["Jf"] for Jp in Jp_vals for Wf in Wf_vals]
+            sc = ax.scatter(x, y, c=scData, marker="o", cmap="magma", s=4)
+            fig.colorbar(sc, location="left", label=fgLabel, pad=-0.4)
+        else
+            fig, ax = subplots(figsize=(5, 3.5))
+            keyData = [r[key] for r in results]
+            fgLabel = L"$g^* > 0?~$(FG)" 
+        end
+        hm = ax.imshow(reshape(keyData, length(Wf_vals), length(Jp_vals)), origin="lower", cmap="magma_r", aspect="auto", extent=vcat(extrema(Jp_vals)..., extrema(-Wf_vals)...) ./ COUPLINGS["Jf"])
+        ax.set_xlabel(L"$J_\perp / J_f$")
+        ax.set_ylabel(L"$-W_f/J_f$")
+        ax.grid(false)
+        ax.set_box_aspect(1)
+        fig.colorbar(hm, label=L"$g^*~$(BG)", location="right", format=matplotlib.ticker.FormatStrFormatter("%.2f"))
+        fig.tight_layout()
+        fig.savefig("PD_$(size_BZ)-$(i).pdf", bbox_inches="tight")
+    end
+end
+
+
+function MomentumCorr(
+        Wf_vals,
+        Jp_vals,
+        size_BZ,
+        maxSize;
+        loadData=false
+    )
+    couplings = copy(COUPLINGS)
+    parameterSpace = Iterators.product(Wf_vals, Jp_vals)
+    corrDef = Dict(
+                   "SF-f-fk" => ("f", (i, j) -> [("+-+-", [1, 2, i+1, j], 0.5), 
+                                                ("+-+-", [2, 1, i, j+1], 0.5),
+                                                ("n+-", [1, i, j], 0.25), 
+                                                ("n+-", [1, i+1, j+1], -0.25),
+                                                ("n+-", [2, i, j], -0.25),
+                                                ("n+-", [2, i+1, j+1], 0.25)
+                                               ]
+                               ),
+                   # "SF-f-dk" => ("d", (i, j) -> [("+-+-", [1, 2, i+1, j], 0.5), 
+                   #                              ("+-+-", [2, 1, i, j+1], 0.5),
+                   #                              ("n+-", [1, i, j], 0.25), 
+                   #                              ("n+-", [1, i+1, j+1], -0.25),
+                   #                              ("n+-", [2, i, j], -0.25),
+                   #                              ("n+-", [2, i+1, j+1], 0.25)
+                   #                             ]
+                   #             ),
+                   # "SF-d-dk" => ("d", (i, j) -> [("+-+-", [3, 4, i+1, j], 0.5), 
+                   #                              ("+-+-", [4, 3, i, j+1], 0.5),
+                   #                              ("n+-", [3, i, j], 0.25), 
+                   #                              ("n+-", [3, i+1, j+1], -0.25),
+                   #                              ("n+-", [4, i, j], -0.25),
+                   #                              ("n+-", [4, i+1, j+1], 0.25)
+                   #                             ]
+                   #             ),
+                   "SF-d-fk" => ("f", (i, j) -> [("+-+-", [3, 4, i+1, j], 0.5), 
+                                                ("+-+-", [4, 3, i, j+1], 0.5),
+                                                ("n+-", [3, i, j], 0.25), 
+                                                ("n+-", [3, i+1, j+1], -0.25),
+                                                ("n+-", [4, i, j], -0.25),
+                                                ("n+-", [4, i+1, j+1], 0.25)
+                                               ]
+                               ),
+                  )
+    dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
+    momentumPoints = Dict(k => getIsoEngCont(dispersion, 0.) for k in ["f", "d"])
+    pooledResults = @showprogress @distributed vcat for (Wf, Jp) in collect(parameterSpace)
+        params = merge(couplings, Dict("J⟂" => Jp, "Wf" => Wf, "size_BZ" => size_BZ, "maxSize" => maxSize))
+        results = AuxiliaryCorrelations(
+                                        params,
+                                        corrDef,
+                                        momentumPoints,
+                                        Dict(),
+                                        Dict();
+                                        loadData=loadData,
+                                       )
+        [results]
+    end
+    # println(pooledResults[1])
+    node = map2DTo1D(π/2, π/2, size_BZ)
+    antinode = map2DTo1D(π/1, 0., size_BZ)
+    SFresults = Dict(
+                     "f-N" => [sum(r["SF-f-fk-$node"].^2)^0.5 for r in pooledResults],
+                     "f-AN" => [sum(r["SF-f-fk-$antinode"].^2)^0.5 for r in pooledResults],
+                     "d-N" => [sum(r["SF-d-fk-$node"].^2)^0.5 for r in pooledResults],
+                     "d-AN" => [sum(r["SF-d-fk-$antinode"].^2)^0.5 for r in pooledResults],
+                    )
+    # SFresults = [count(>(0), abs.([r["SF-f-k"][(p, p)] for p in momentumPoints["f"]])) for r in pooledResults]
+    # println(SFresults)
+    fig, ax = plt.subplots(ncols=2, nrows=2, figsize=(10, 8))
+    for (i, r) in zip([(1,1), (2,1), (1,2), (2,2)], ["f-N", "f-AN", "d-N", "d-AN"])
+        hm = ax[i...].imshow(reshape(SFresults[r], length(Wf_vals), length(Jp_vals)), origin="lower", cmap="magma_r", aspect="auto", extent=vcat(extrema(Jp_vals)..., extrema(-Wf_vals)...) ./ COUPLINGS["Jf"]) #, norm=matplotlib[:colors][:LogNorm](vmin=1e-3,))
+        ax[i...].set_ylabel(L"-W_f/J_f")
+        ax[i...].set_xlabel(L"J_\perp/J_f")
+        fig.colorbar(hm, label=r, location="right")
+        # fig.colorbar(hm, label=L"\sum_{k}|\chi_{k_\mathrm{N}, k}|", location="right")
+    end
+    # hm = ax[1, 2].imshow(reshape(SFresults["d-N"], length(Wf_vals), length(Jp_vals)), origin="lower", cmap="magma_r", aspect="auto", extent=vcat(extrema(Jp_vals)..., extrema(-Wf_vals)...) ./ COUPLINGS["Jf"])
+    # ax[2, 2].imshow(reshape(SFresults["d-AN"], length(Wf_vals), length(Jp_vals)), origin="lower", cmap="magma_r", aspect="auto", extent=vcat(extrema(Jp_vals)..., extrema(-Wf_vals)...) ./ COUPLINGS["Jf"])
+    # ax[1, 2].set_ylabel(L"-W_f/J_f")
+    # ax[1, 2].set_xlabel(L"J_\perp/J_f")
+    # fig.colorbar(hm, label=L"\sum_{k}|\chi_{k_\mathrm{AN}, k}|", location="right")
     fig.tight_layout()
-    fig.savefig("PD_$(size_BZ).pdf", bbox_inches="tight")
+    fig.savefig("RC-$(size_BZ)-$(maxSize).pdf", bbox_inches="tight")
 end
 
 
@@ -115,7 +178,7 @@ function RealCorr(
     node = map2DTo1D(π/2, π/2, size_BZ)
     antinode = map2DTo1D(3π/4, π/4, size_BZ)
     microCorrelation = Dict(
-                            "SF-fkk" => ("f", (i, j) -> [("+-+-", [1, 2, i+1, j], 0.5), 
+                            "SF-f-k" => ("f", (i, j) -> [("+-+-", [1, 2, i+1, j], 0.5), 
                                                          ("+-+-", [2, 1, i, j+1], 0.5),
                                                          ("n+-", [1, i, j], 0.25), 
                                                          ("n+-", [1, i+1, j+1], -0.25),
@@ -127,12 +190,12 @@ function RealCorr(
                             #=                             ("n+-", [3, i+1, j+1], -0.25), =#
                             #=                             ("n+-", [4, i, j], -0.25), =#
                             #=                             ("n+-", [4, i+1, j+1], 0.25)]),=#
-                            "SF-fdpm" => ("i", [("+-+-", [1, 2, 4, 3], 1 / 2), 
-                                                ("+-+-", [2, 1, 3, 4], 1 / 2)]),
-                            "SF-fdzz" => ("i", [("nn", [1, 3], 1 / 4), 
-                                                ("nn", [1, 4], -1 / 4), 
-                                                ("nn", [2, 3], -1 / 4), 
-                                                ("nn", [2, 4], 1 / 4)]),
+                            # "SF-fdpm" => ("i", [("+-+-", [1, 2, 4, 3], 1 / 2), 
+                            #                     ("+-+-", [2, 1, 3, 4], 1 / 2)]),
+                            # "SF-fdzz" => ("i", [("nn", [1, 3], 1 / 4), 
+                            #                     ("nn", [1, 4], -1 / 4), 
+                            #                     ("nn", [2, 3], -1 / 4), 
+                            #                     ("nn", [2, 4], 1 / 4)]),
                             #="CF-dkk" => ("d", (i, j) -> [("++--", [3, 4, i+1, j], 0.5), =#
                             #=                             ("++--", [4, 3, i, j+1], 0.5)]),=#
                             #="CF-fkk" => ("f", (i, j) -> [("++--", [1, 2, i+1, j], 0.5), =#
@@ -148,8 +211,8 @@ function RealCorr(
     entanglement =  Dict(
                          #="SEE-d" => [3, 4],=#
                          #="SEE-f" => [1, 2],=#
-                         "I2-f-d" => ([1, 2], [3, 4]),
-                         "I2-f-max" => (f, d) -> ([1, 2], [f, f+1]),
+                         # "I2-f-d" => ([1, 2], [3, 4]),
+                         # "I2-f-max" => (f, d) -> ([1, 2], [f, f+1]),
                          #="I2-d-max" => (f, d) -> ([3, 4], [d, d+1]),=#
                         )
     pooledResults = @showprogress pmap(WfJ -> AuxiliaryCorrelations(size_BZ,
@@ -699,8 +762,9 @@ function RealSpecFunc(
     plt.close()
 end
 
-RGFlow(Dict("Jd" => 0.1, "Jf" => 0.1, "Wd_by_Wf" => 0., "Uf" => 9., "Ud" => 9., "μf" => 4.5,), -0.07:-0.005:-0.15, 0:0.01:0.4, [4.5], 13; loadData=false,)
-
+# RGFlow(-0.1:-0.0025:-0.17, 0:0.05:1.0, 33; loadData=true)
+# RGFlow(-0.0:-0.05:-0.2, 0:0.01:0.01, 13; loadData=false,)
+MomentumCorr(-0.16:-0.0025:-0.18, 0.00:0.025:0.2, 33, 399; loadData=true)
 #=@time RealCorr(33, 0896, 0.05:0.025:0.40, -0.0:-0.02:-0.160, 0.; loadData=false)=#
 #=@time MomentumSpecFunc(33, 1500, [0.0, 0.2], [-0., -0.2], 0.0; loadData=false)=#
 #=@time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.1409, -0.147, -0.152, -0.1535], 0.0; loadData=true)=#
