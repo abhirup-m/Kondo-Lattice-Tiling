@@ -16,12 +16,6 @@ function initialiseKondoJ(
 end
 
 
-function getCutOffEnergy(size_BZ)
-    kx_pos_arr = [kx for kx in range(K_MIN, K_MAX, length=size_BZ) if kx >= 0]
-    return sort(-tightBindDisp(kx_pos_arr, 0 .* kx_pos_arr), rev=true)
-end
-
-
 function highLowSeparation(
         dispersionArray,
         energyCutoff,
@@ -52,7 +46,7 @@ function highLowSeparation(
     return innerIndices, cutoffPoints, cutoffHolePoints, proceedFlags
 end
 
-@everywhere function momentumSpaceRGFull(
+function momentumSpaceRGFull(
         bareCouplings::Dict;
         progressbarEnabled=false,
         loadData::Bool=false,
@@ -225,7 +219,7 @@ end
     return couplings
 end
 
-@everywhere function momentumSpaceRG(
+function momentumSpaceRG(
         bareCouplings::Dict;
         progressbarEnabled=false,
         loadData::Bool=false,

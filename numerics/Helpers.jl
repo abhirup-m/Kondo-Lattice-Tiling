@@ -1,6 +1,6 @@
 # helper functions for switching back and forth between the 1D flattened representation (1 → N^2) 
 # and the 2D representation ((1 → N)×(1 → N))
-@everywhere function map1DTo2D(
+function map1DTo2D(
         point::Int64,
         size_BZ::Int64
     )
@@ -14,7 +14,7 @@
     k_values = range(K_MIN, stop=K_MAX, length=size_BZ)
     return [k_values[kx_index], k_values[ky_index]]
 end
-@everywhere function map1DTo2D(
+function map1DTo2D(
         point::Vector{Int64},
         size_BZ::Int64
     )
@@ -226,7 +226,7 @@ function PropagateIndices(
 end
 
 
-@everywhere function bathIntForm(
+function bathIntForm(
     bathIntStr::Float64,
     size_BZ::Int64,
     points,
@@ -355,48 +355,6 @@ function FillIn(limits)
 end
 
 
-function Resilient(
-        func::Function,
-        args...;
-        maxTries::Int=1,
-        numProcs::Int=10,
-        kwargs...
-    )
-
-    retries = 0
-    while retries < maxTries
-        try
-            if nprocs() == 1 && numProcs > 1
-                addprocs(numProcs)
-            end
-            println("Using $(nprocs()) processes and $(Threads.nthreads()) threads. $(retries) retries.")
-
-            @everywhere submitDir = pwd() * "/"
-            @everywhere if "SLURM_SUBMIT_DIR" in keys(ENV)
-                submitDir = ENV["SLURM_SUBMIT_DIR"] * "/"
-            end
-
-            @everywhere include(submitDir * "Constants.jl")
-            @everywhere include(submitDir * "Helpers.jl")
-            @everywhere include(submitDir * "RgFlow.jl")
-            @everywhere include(submitDir * "Models.jl")
-            @everywhere include(submitDir * "PhaseDiagram.jl")
-            @everywhere include(submitDir * "Probes.jl")
-            @everywhere include(submitDir * "PltStyle.jl")
-
-            func(args...; kwargs...)
-            break
-        catch e
-            showerror(stdout, e)
-            if nprocs() > 1
-                rmprocs(2:nprocs())
-            end
-            retries += 1
-        end
-    end
-end
-
-
 function ExtendedSaveName(
         couplings::Dict{String, Any},
     )
@@ -466,11 +424,18 @@ function Normalise(specFunc, ω; tolerance=1e-4)
 end
 
 function impCorr(Wf, U_by_W)
-    #=return minimum((12., abs(Wf) * U_by_W))=#
-    if abs(Wf) > 0.1
-        return abs(abs(Wf) - 0.1) * U_by_W
+    return abs(Wf) * U_by_W
+    if abs(Wf) > 0.14
+        return abs(abs(Wf) - 0.14) * U_by_W
     else
         return 0.
         #=return maximum((1., abs(abs(Wf) - 0.1) * U_by_W))=#
     end
 end
+
+function getCutOffEnergy(size_BZ)
+    kx_pos_arr = [kx for kx in range(K_MIN, K_MAX, length=size_BZ) if kx >= 0]
+    return sort(-tightBindDisp(kx_pos_arr, 0 .* kx_pos_arr), rev=true)
+end
+
+
