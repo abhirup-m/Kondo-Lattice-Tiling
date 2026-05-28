@@ -87,15 +87,12 @@ function IterDiagMomentumSpace(
     )
 
     truncatedPoints = Dict()
-    # pivotKspace = (π/2, π/2)
-    # pivot = map2DTo1D(pivotKspace..., size_BZ)
     pivotKspace = map1DTo2D(pivot, size_BZ)
     for k in typesOrder
         truncatedPoints[k] = sort(filter(p -> map1DTo2D(p, size_BZ)[1] ≥ 0 && map1DTo2D(p, size_BZ)[2] ≥ 0, momentumPoints), 
                                   by=p->sum((map1DTo2D(p, size_BZ) .- pivotKspace).^2),
                                   # rev=true
                                  )
-        # @assert all(∈(truncatedPoints[k]), calculateAt)
     end
 
     totalSize = sum(length.(values(truncatedPoints)))
@@ -122,36 +119,15 @@ function IterDiagMomentumSpace(
     for (i, k) in enumerate(typesOrder)
         if k == typesOrder[1]
             indices = 1:length(truncatedPoints[typesOrder[1]])
-            # indices = 1:2:(length(truncatedPoints["f"]) + length(truncatedPoints["d"]))
         else
             indices = (length(truncatedPoints[typesOrder[1]]) + 1):1:(length(truncatedPoints["f"]) + length(truncatedPoints["d"]))
-            # indices = 2:2:(length(truncatedPoints["f"]) + length(truncatedPoints["d"]))
         end
         J[indices, indices] = hamiltDetails["J"*k][truncatedPoints[k], truncatedPoints[k]] .* hamiltDetails["factor"]
-        #=if k == "f" && all(==(0), J[indices, indices])=#
-        #=    J[1, 1] = HOP_T^2 / hamiltDetails["impCorr"]["f"]=#
-        #=end=#
         append!(layerSpecs, repeat([k], length(truncatedPoints[k])))
         append!(indToMom, [(m, k) for m in truncatedPoints[k]])
         stargraph[indices, indices] .= J[indices, indices]
-        # unitary[indices, indices] .= diagm(ones(length(indices)))
-        # stargraph[diagind(stargraph)[indices]], unitary[indices, indices] = eigen(Hermitian(J[indices, indices]))
-        # if k == "d"
-        #     hybrid[indices] = abs.(hamiltDetails["impCorr"][k] .* unitary[indices, indices] * diag(J[indices, indices])).^0.5
-        # end
     end
 
-    # sortseq = 1:length(layerSpecs)
-    # sortseq = sortperm(diag(stargraph), rev=true)
-    # filter!(i -> abs(stargraph[i, i]) > tolerance, sortseq)
-    # for k in ["f", "d"]
-    #     if k ∉ layerSpecs[sortseq]
-    #         push!(sortseq, findfirst(==(k), layerSpecs))
-    #     end
-    # end
-    # stargraph = stargraph[sortseq, sortseq]
-    # layerSpecs = layerSpecs[sortseq]
-    # hybrid = hybrid[sortseq]
 
     # obtain Hamiltonian with sorted Kondo matrix
     Jperp = clamp(hamiltDetails["J⟂"] / (abs(hamiltDetails["Jf"][pivot, pivot]) / COUPLINGS["Jf"])^0.5, 0, 1 * hamiltDetails["J⟂"])
@@ -187,26 +163,6 @@ function IterDiagMomentumSpace(
         # println(indToMom)
         uplocation = 3 + 2 * findfirst(==((pivot, t)), indToMom)
         merge!(specFuncDefDict, Dict("$k-$pivot" => func(uplocation)))
-        # if type == "+-"
-        #     specFuncDefDict[k] = Dict()
-        #     condition, func = v[2:3]
-        #     mom = Dict(t => 3 + 2 * momentumMapping[t][filter(condition, truncatedPoints[t])[1]] for t in ["d", "f"])
-        #     specFuncOperator = func(mom)
-        #     if isa(specFuncOperator, Dict)
-        #         specFuncDefDict[k] = specFuncOperator
-        #     else
-        #         specFuncDefDict[k]["create"] = specFuncOperator
-        #     end
-        #     #=for p in filter(condition, truncatedPoints[t1])=#
-        #     #=    mom = Dict(t => 3 + 2 * momentumMapping[t][p] for t in typesOrder)=#
-        #     #=    specFuncOperator = func(mom)=#
-        #     #=    if isa(specFuncOperator, Dict)=#
-        #     #=        specFuncDefDict[k] = specFuncOperator=#
-        #     #=    else=#
-        #     #=        specFuncDefDict[k]["create"] = specFuncOperator=#
-        #     #=    end=#
-        #     #=end=#
-        # end
     end
     for (k, v) in specFuncDefDict
         if !haskey(v, "destroy")
@@ -473,18 +429,17 @@ function IterDiagRealSpace(
     )
 
     t1, t2 = typesOrder
-    # only momentum points with ky ≥ 0 need to be
-    # solved for, the rest can be mapped exactly
     truncatedPoints = Dict()
-    for k in ["f", "d"]
-        #=truncatedPoints[k] = filter(p -> true, momentumPoints[k])=#
-        truncatedPoints[k] = filter(p -> map1DTo2D(p, size_BZ)[2] ≥ 0, momentumPoints)
-        if length(truncatedPoints[k]) % 2 ≠ 0
-            truncatedPoints[k] = filter(p -> map1DTo2D(p, size_BZ)[2] ≥ 0 && map1DTo2D(p, size_BZ)[1] > -π, momentumPoints)
+    pivotKspace = (π/2, π/2)
+    for k in typesOrder
+        truncatedPoints[k] = sort(filter(p -> map1DTo2D(p, size_BZ)[2] ≥ 0 && map1DTo2D(p, size_BZ)[2] ≥ 0, momentumPoints), 
+                                  by=p->sum((map1DTo2D(p, size_BZ) .- pivotKspace).^2),
+                                  # rev=true
+                                 )
+        if length(truncatedPoints[k]) % 2 != 0
+            truncatedPoints[k] = truncatedPoints[k][1:end-1]
         end
     end
-    node = map2DTo1D(π/2, π/2, size_BZ)
-    #=filter!(==(node), truncatedPoints[t2])=#
 
     totalSize = length(truncatedPoints[t1]) + length(truncatedPoints[t2])
 
@@ -502,40 +457,31 @@ function IterDiagRealSpace(
     # upper half, while f-correlations come from lower half.
     hybrid = zeros(totalSize)
 
-    hop_eff = Dict("f" => HOP_T, "d" => HOP_T)
+    hop_eff = Dict("f" => HOP_T / 10, "d" => HOP_T / 10)
     hop_step = Dict()
-    sortSeq = collect(1:length(layerSpecs))
     for t in typesOrder
         hop_step[t] = 1
         indices = findall(==(t), layerSpecs)
         if all(>(0), abs.(diag(hamiltDetails["J"*t][truncatedPoints[t], truncatedPoints[t]])))
-            # hybrid[indices[1]] = maximum(abs.(hamiltDetails["V"][t][truncatedPoints[t]]))
             for ((i1, ind1), (i2, ind2)) in Iterators.product(enumerate(indices), enumerate(indices))
-                J[ind1, ind2] = sum([2 * hamiltDetails["J"*t][k, q] * cos(i1 * map1DTo2D(k, size_BZ)[1] - i2 * map1DTo2D(q, size_BZ)[1]) for k in momentumPoints for q in momentumPoints])
+                J[ind1, ind2] = sum([2 * hamiltDetails["J"*t][k, q] * cos(i1 * map1DTo2D(k, size_BZ)[1] - i2 * map1DTo2D(q, size_BZ)[1]) for k in momentumPoints for q in momentumPoints]) / length(momentumPoints)^2
             end
         elseif any(>(0), abs.(diag(hamiltDetails["J"*t][truncatedPoints[t], truncatedPoints[t]]))) && any(==(0), abs.(diag(hamiltDetails["J"*t][truncatedPoints[t], truncatedPoints[t]])))
+            println(t)
             hop_step[t] = 2
             subinds1 = indices[1:2:end]
             subinds2 = indices[2:2:end]
-            # hybrid[subinds1[1]] = maximum(abs.(hamiltDetails["V"][t][truncatedPoints[t]]))
+            @assert length(subinds1) == length(subinds2)
             for ((i1, ind1), (i2, ind2)) in Iterators.product(enumerate(subinds1), enumerate(subinds1))
-                #=J[ind1, ind1] = sum([2 * hamiltDetails[t][k, k] * cos(i1 * map1DTo2D(k, size_BZ)[1] ) for k in momentumPoints[t]])=#
-                J[ind1, ind2] = sum([2 * hamiltDetails["J"*t][k, q] * cos(i1 * map1DTo2D(k, size_BZ)[1] - i2 * map1DTo2D(q, size_BZ)[1]) for k in momentumPoints for q in momentumPoints])
+                J[ind1, ind2] = sum([2 * hamiltDetails["J"*t][k, q] * cos(i1 * map1DTo2D(k, size_BZ)[1] - i2 * map1DTo2D(q, size_BZ)[1]) for k in momentumPoints for q in momentumPoints if map1DTo2D(k, size_BZ)[1] ≥ 0 && map1DTo2D(q, size_BZ)[1] ≥ 0]) / length(momentumPoints)^2
             end
-            #=sortSeq[subinds1] = sortperm(abs.(diag(J[subinds1, subinds1])), rev=true)=#
-            #=J[subinds1, subinds1] = J[subinds1, subinds1][sortSeq[subinds1], sortSeq[subinds1]]=#
-            #=hybrid[subinds1] = hybrid[subinds1][sortSeq[subinds1]]=#
             J[subinds2, subinds2] .= J[subinds1, subinds1]
             hybrid[subinds2] = hybrid[subinds1]
         else
-            J[indices[1], indices[1]] = 1.
+            J[indices[1], indices[1]] = HOP_T^2 / COUPLINGS["U$t"]
             hop_eff[t] = 0.
         end
     end
-    #=sortSeq = sortperm(abs.(diag(J)), rev=false)=#
-    #=J = J[sortSeq, sortSeq]=#
-    #=hybrid = hybrid[sortSeq]=#
-    #=layerSpecs = layerSpecs[sortSeq]=#
 
     # obtain Hamiltonian with sorted Kondo matrix
     hamiltonian = BilayerLEEReal(
@@ -568,43 +514,13 @@ function IterDiagRealSpace(
 
     specFuncDefDict = Dict{String, Dict{String, Vector{Tuple{String, Vector{Int64}, Float64}}}}()
     fd_inds = Dict(k => findall(==(k), layerSpecs) for k in ["f", "d"])
-    for (k, v) in specFunc
-        if k == "ω" || k == "η"
+    for (name, (type, func)) in specFunc
+        @assert type ∈ ["f", "d", "i"] type
+        if type == t2
             continue
         end
-        type = v[1]
-        @assert type ∈ ["if", "id", "i"]
-        specFuncDef = v[2]
-        if type  == "i"
-            if isa(specFuncDef, Function)
-                specFunc = specFuncDef(3 + 2 * findfirst(==(t2), layerSpecs))
-            else
-                specFunc = copy(specFuncDef)
-            end
-            if isa(specFunc, Dict)
-                specFuncDefDict[k] = specFunc
-            else
-                specFuncDefDict[k] = Dict("create" => specFunc)
-            end
-            if haskey(specFuncDefDict, k) && !haskey(specFuncDefDict[k], "destroy")
-                specFuncDefDict[k]["destroy"] = Dagger(copy(specFuncDefDict[k]["create"]))
-            end
-        elseif type == "i$(t1)"
-            name = "$(k)_1"
-            first_t1 = findfirst(==(1), sortSeq)
-            first_t2 = findfirst(==(1 + length(truncatedPoints[t1])), sortSeq)
-            if isa(specFuncDef, Function)
-                specFunc = specFuncDef((3 + 2 * first_t1, 3 + 2 * (first_t1 + first_t2)))
-            end
-            if isa(specFunc, Dict)
-                specFuncDefDict[name] = specFunc
-            else
-                specFuncDefDict[name] = Dict("create" => specFunc)
-            end
-            if haskey(specFuncDefDict, name) && !haskey(specFuncDefDict[name], "destroy")
-                specFuncDefDict[name]["destroy"] = Dagger(copy(specFuncDefDict[name]["create"]))
-            end
-        end
+        specFuncDefDict[name] = func(5)
+        specFuncDefDict[name]["destroy"] = Dagger(copy(specFuncDefDict[name]["create"]))
     end
     results = IterDiag(
                       hamiltonianFamily,
@@ -620,7 +536,7 @@ function IterDiagRealSpace(
 
     @assert results["exitCode"] == 0
 
-    corrResults = Dict(k => results[k] for k in keys(specFuncDefDict))
+    corrResults = Dict(k => results[k] for k in keys(specFunc) if haskey(results, k))
     return corrResults
 end
 
@@ -911,14 +827,6 @@ function AuxiliaryCorrelations(
     if loadData && isfile(savePath)
         results = deserialize(savePath)
         return results, couplings
-        #=if allReqKeys ⊆ keys(availableResults)=#
-        #=    println("Data available. $(join(allReqKeys, ", "))")=#
-        #=    return availableResults, couplings=#
-        #=else=#
-        #=    for k in filter(k -> haskey(correlation, k), keys(availableResults))=#
-        #=        delete!(correlation, k)=#
-        #=    end=#
-        #=end=#
     end
 
     if !isempty(correlation) || !isempty(entanglement)
@@ -942,31 +850,6 @@ function AuxiliaryCorrelations(
                 merge!(availableResults, results)
             end
         end
-        # for typesOrder in [["f", "d"], ["d", "f"]]
-        #     if !any(==(typesOrder[1]), correlation |> values .|> first)
-        #         continue
-        #     end
-        #     results = IterDiagRealSpace(
-        #                                 couplings,
-        #                                 size_BZ,
-        #                                 maxSize,
-        #                                 momentumPoints,
-        #                                 typesOrder,
-        #                                 correlation,
-        #                                 entanglement;
-        #                                 addPerStep=1,
-        #                                )
-        #     for (k, v) in results
-        #         if typesOrder[1] == "f"
-        #             @assert !haskey(availableResults, k) k
-        #         end
-        #         if haskey(availableResults, k)
-        #             availableResults[k] = 0.5 * (availableResults[k] + v)
-        #         else
-        #             availableResults[k] = v
-        #         end
-        #     end
-        # end
     end
 
     if !isempty(specFunc)
@@ -979,18 +862,6 @@ function AuxiliaryCorrelations(
                     if isempty(filteredSpecFunc)
                         continue
                     end
-                    # pivotResults = pmap(pivot -> IterDiagMomentumSpace(
-                    #                                     merge(couplings, Dict("factor" => factor)),
-                    #                                     size_BZ,
-                    #                                     maxSize,
-                    #                                     momentumPoints,
-                    #                                     typesOrder,
-                    #                                     pivot,
-                    #                                     filteredSpecFunc;
-                    #                                     addPerStep=1,
-                    #                                    ),
-                    #                     params["calculateAt"]
-                    #                    )
                     pivotResults = Any[Nothing for _ in params["calculateAt"]]
                     Threads.@threads for (i, pivot) in params["calculateAt"] |> enumerate |> collect
                         pivotResults[i] = IterDiagMomentumSpace(
@@ -1009,28 +880,23 @@ function AuxiliaryCorrelations(
             end
             merge!(availableResults, mergewith(vcat, combinedResults...))
         else
-            for typesOrder in [["f", "d"], ["d", "f"]]
-                results = IterDiagRealSpace(
-                                                couplings,
-                                                size_BZ,
-                                                maxSize,
-                                                momentumPoints,
-                                                typesOrder,
-                                                specFunc;
-                                                addPerStep=1,
-                                                realCutoff=realCutoff,
-                                               )
-                for (k, v) in results
-                    if typesOrder[1] == "f"
-                        @assert !haskey(availableResults, k) k
-                    end
-                    if haskey(availableResults, k)
-                        availableResults[k] = vcat(availableResults[k], v)
-                    else
-                        availableResults[k] = v
-                    end
+            factors = [1.]
+            combinedResults = [Dict() for _ in factors]
+            @showprogress desc="factors" Threads.@threads for (i, factor) in factors |> enumerate |> collect
+                for typesOrder in [["f", "d"],]
+                    results = IterDiagRealSpace(
+                                                 merge(couplings, Dict("factor" => factor)),
+                                                 size_BZ,
+                                                 maxSize,
+                                                 momentumPoints,
+                                                 typesOrder,
+                                                 specFunc;
+                                                 addPerStep=1,
+                                                )
+                    mergewith!(vcat, combinedResults[i], results)
                 end
             end
+            merge!(availableResults, mergewith(vcat, combinedResults...))
         end
     end
 

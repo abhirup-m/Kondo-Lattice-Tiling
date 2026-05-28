@@ -572,6 +572,7 @@ function BilayerLEEReal(
         couplingTolerance::Number=1e-15,
         heisenberg::Dict{String, Vector{Float64}}=Dict{String, Vector{Float64}}(),
     )
+
     #=@assert layerSpecs[1] ≠ layerSpecs[end]=#
     @assert size(J)[1] == size(J)[2] == length(layerSpecs) == length(hybrid)
 

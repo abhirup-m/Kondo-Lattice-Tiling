@@ -269,13 +269,6 @@ function MomentumSpecFunc(
         loadData=false,
         map=false
     )
-    names = Dict(
-                 "node_d" => L"A_d",
-                 "node_f" => L"A_f",
-                 "node_+" => L"A_+",
-                 "node_-" => L"A_-",
-                )
-
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
     momentumPoints = getIsoEngCont(dispersion, 0.)
     ω = collect(-20:0.001:20)
@@ -468,6 +461,93 @@ end
 function RealSpecFunc(
         size_BZ::Int64,
         maxSize::Int64,
+        Jp_vals,
+        Wf_vals;
+        loadData=false,
+    )
+    names = Dict(
+                 "node_d" => L"A_d",
+                 "node_f" => L"A_f",
+                 "node_+" => L"A_+",
+                 "node_-" => L"A_-",
+                )
+
+    dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
+    momentumPoints = getIsoEngCont(dispersion, 0.)
+    ω = collect(-20:0.001:20)
+    ωp = abs.(ω) .< 1.0
+    σ = 0.08
+
+    impSites = Dict("f" => [1, 2], "d" => [3, 4])
+
+    siam(i) = Dict("create" => [("+", [i], 1.0), ("+", [i+1], 1.0)])
+    kondo(i, j) = Dict("create" => [
+                                    ("+-+", [i, i+1, j+1], 1.0),
+                                    ("+-+", [i+1, i, j], 1.0),
+                                   ]
+                      )
+    specFuncReqs = Dict(
+                        "Af_f_loc" => ("f", z -> siam(1)),
+                        "Af_f0_loc" => ("f", z -> kondo(1, z)),
+                        "Ad_d_loc" => ("d", z -> siam(3)),
+                        "Ad_d0_loc" => ("d", z -> kondo(3, z)),
+                        "Af_d_loc" => ("i", z -> kondo(1, 3)),
+                       )
+    counter = 1
+    plots = Dict(name => plt.subplots(ncols=length(Jp_vals), figsize=(8 * length(Jp_vals), 6)) for name in keys(names))
+    couplingSets = Iterators.product(Wf_vals, Jp_vals)
+
+    resultsPooled = Dict(c => Dict("SF" => Dict(), "kondoFactor" => 0.0, "perpFactor" => 0.0) for c in couplingSets)
+    fermiSurface = getIsoEngCont(dispersion, 0.)
+    @showprogress desc="outer" Threads.@threads for (i, (Wf, Jp)) in enumerate(couplingSets) |> collect
+        params = Dict{String, Any}(merge(COUPLINGS, Dict("J⟂" => Jp, "Wf" => Wf, "size_BZ" => size_BZ, "maxSize" => maxSize)))
+        results, couplings = AuxiliaryCorrelations(
+                                        params,
+                                        Dict(),
+                                        momentumPoints,
+                                        Dict(),
+                                        specFuncReqs;
+                                        loadData=loadData,
+                                       )
+        resultsPooled[(Wf, Jp)] = Dict(
+              "SF" => results,
+              "fFactor" => clamp(maximum(couplings["Jf"][fermiSurface,fermiSurface]) / COUPLINGS["Jf"], 0., 1.)^0.5,
+              "dFactor" => clamp(maximum(couplings["Jd"][fermiSurface,fermiSurface]) / COUPLINGS["Jf"], 0., 1.)^0.5,
+              "perpFactor" => Jp == 0 ? 0 : couplings["J⟂"][end] / Jp
+             )
+        # rm("data-iterdiag", force=true, recursive=true)
+    end
+    fig, ax = plt.subplots(nrows=length(Wf_vals), figsize=(7, 4.5 * length(Wf_vals)))
+    SF = Any[Nothing for _ in couplingSets]
+    Threads.@threads for (i, (Wf, Jp)) in couplingSets |> enumerate |> collect 
+        t = "f"
+        σ1 = σ # map(ωi -> minimum(abs.(last.(vcat(resultsPooled[(Wf, Jp)]["SF"]["Af_d_loc"]...)) .- ωi)) < 1e-2 ? σ : 0.0, ω)
+        Af_d = resultsPooled[(Wf, Jp)]["perpFactor"] .* SpecFunc(vcat(resultsPooled[(Wf, Jp)]["SF"]["Af_d_loc"]...), ω, σ1)
+        σ2 = σ # map(ωi -> minimum(abs.(last.(vcat(resultsPooled[(Wf, Jp)]["SF"]["A$(t)_$(t)0_loc"]...)) .- ωi)) < 1e-2 ? σ : 0.0, ω)
+        Att = SpecFunc(vcat(resultsPooled[(Wf, Jp)]["SF"]["A$(t)_$(t)_loc"]...), ω, σ)
+        At_t0 = resultsPooled[(Wf, Jp)][t*"Factor"] .* SpecFunc(vcat(resultsPooled[(Wf, Jp)]["SF"]["A$(t)_$(t)0_loc"]...), ω, σ2)
+        SF[i] = (Att, At_t0, Af_d)
+    end
+    for ((Att, At_t0, Af_d), (Wf, Jp)) in zip(SF, couplingSets)
+        axi = ax[findfirst(==(Wf), Wf_vals)]
+        axTitle = L"W_f = %$(round(Wf/COUPLINGS[\"Jf\"], digits=2))"
+        # axi.plot(ω[ωp], Att[ωp], label=L"J_\perp = %$Jp", lw=3)
+        axi.plot(ω[ωp], Normalise(Att .+ Af_d .+ At_t0, ω)[ωp], label=L"J_\perp = %$Jp", lw=3)
+        # axi.plot(ω[ωp], , label=L"J_\perp = %$Jp", lw=3)
+        axi.legend()
+        axi.set_title(axTitle)
+        axi.set_xlabel(L"\omega")
+        axi.set_ylabel(L"A(\omega)")
+        # axi.set_yscale("log")
+    end
+    fig.tight_layout()
+    fig.savefig("SFR-$size_BZ-$maxSize.pdf", bbox_inches="tight")
+end
+
+
+function RealSpecFuncOld(
+        size_BZ::Int64,
+        maxSize::Int64,
         Jp_vals::Vector,
         Wf_vals::Vector,
         ηd::Number;
@@ -584,7 +664,6 @@ function RealSpecFunc(
                                      )
         avgKondo = Dict(k => minimum((1, sum(abs.(fpCouplings[k][momentumPoints[k], momentumPoints[k]])) / (length(momentumPoints[k])^1.0 * couplings["J$(k)"]))) for k in ["f", "d"])
         #=avgKondo = Dict(k => minimum((Inf, sum(abs.(fpCouplings[k][momentumPoints[k], momentumPoints[k]])) / (length(momentumPoints[k])^1.0 * couplings["J$(k)"]))) for k in ["f", "d"])=#
-        println(Wf, avgKondo)
 
         specFuncResults = Dict()
 
@@ -760,8 +839,8 @@ end
 # @time MomentumSpecFunc(33, 399, [0.0, 0.2, 0.4], [-0., -0.165, -0.174]; loadData=true)
 # @time MomentumSpecFunc(33, 399, 0.025:0.00625:0.3, 0:-0.005:-0.18; loadData=true, map=true)
 # @time MomentumSpecFuncMap(33, 598, [0.0,], [-0.165, -0.166, -0.167, -0.17, -0.172, -0.174, -0.1741]; loadData=true)
-@time MomentumSpecFuncMap(33, 599, [0.11, 0.124, 0.1245, 0.1247, 0.1249, 0.125,], [-0.166,]; loadData=true)
-@time MomentumSpecFuncMap(33, 601, 0.151:0.0005:0.154, [-0.1,]; loadData=true)
-@time MomentumSpecFuncMap(33, 600, [0.33, 0.36, 0.37, 0.4, 0.41], [-0.05,]; loadData=true)
-# @time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.1409, -0.147, -0.152, -0.1535], 0.0; loadData=true)
+# @time MomentumSpecFuncMap(33, 599, [0.11, 0.124, 0.1245, 0.1247, 0.1249, 0.125,], [-0.166,]; loadData=true)
+# @time MomentumSpecFuncMap(33, 601, 0.15:0.0005:0.154, [-0.1,]; loadData=true)
+# @time MomentumSpecFuncMap(33, 600, [0.32, 0.36, 0.37, 0.4, 0.41], [-0.05,]; loadData=true)
+@time RealSpecFunc(33, 609, [0., 0.3, 0.6], [-0.0, -0.1, -0.16, -0.17, -0.18]; loadData=true)
 #=@time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.12, -0.1409, -0.147, -0.152, -0.1535, -0.16], 0.0; loadData=true)=#
