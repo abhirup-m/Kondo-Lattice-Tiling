@@ -437,5 +437,3 @@ function getCutOffEnergy(size_BZ)
     kx_pos_arr = [kx for kx in range(K_MIN, K_MAX, length=size_BZ) if kx >= 0]
     return sort(-tightBindDisp(kx_pos_arr, 0 .* kx_pos_arr), rev=true)
 end
-
-

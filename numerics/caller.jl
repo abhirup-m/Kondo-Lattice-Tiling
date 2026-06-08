@@ -1,4 +1,4 @@
-using Distributed, Serialization
+using Distributed, Serialization, LsqFit
 @everywhere include("initialise.jl")
 @everywhere COUPLINGS = Dict(
               "bw" => 1.0,
@@ -474,9 +474,13 @@ function RealSpecFunc(
 
     dos, dispersion = getDensityOfStates(tightBindDisp, size_BZ)
     momentumPoints = getIsoEngCont(dispersion, 0.)
-    ω = collect(-20:0.001:20)
+    omega_domainwall = 0.01
+    # ω = vcat(-100:0.0001:-omega_domainwall, -1 .* 10 .^ (log10(omega_domainwall):-0.001:-5))
+    # ω = vcat(ω, -1 .* reverse(ω))
+    ω = collect(-5.0:0.0001:5.0)
+    ω = sort(ω)
     ωp = abs.(ω) .< 1.0
-    σ = 0.08
+    σ = 0.1
 
     impSites = Dict("f" => [1, 2], "d" => [3, 4])
 
@@ -495,12 +499,18 @@ function RealSpecFunc(
                        )
     counter = 1
     plots = Dict(name => plt.subplots(ncols=length(Jp_vals), figsize=(8 * length(Jp_vals), 6)) for name in keys(names))
-    couplingSets = Iterators.product(Wf_vals, Jp_vals)
+    couplingSets = vec(collect(Iterators.product(Wf_vals, Jp_vals)))
+    if (0., 0.) ∉ couplingSets
+        couplingSets = vcat([(0., 0.)], couplingSets)
+    end
 
     resultsPooled = Dict(c => Dict("SF" => Dict(), "kondoFactor" => 0.0, "perpFactor" => 0.0) for c in couplingSets)
     fermiSurface = getIsoEngCont(dispersion, 0.)
     @showprogress desc="outer" Threads.@threads for (i, (Wf, Jp)) in enumerate(couplingSets) |> collect
         params = Dict{String, Any}(merge(COUPLINGS, Dict("J⟂" => Jp, "Wf" => Wf, "size_BZ" => size_BZ, "maxSize" => maxSize)))
+        if Wf == 0
+            params["Uf"] = 0.
+        end
         results, couplings = AuxiliaryCorrelations(
                                         params,
                                         Dict(),
@@ -517,8 +527,10 @@ function RealSpecFunc(
              )
         # rm("data-iterdiag", force=true, recursive=true)
     end
-    fig, ax = plt.subplots(nrows=length(Wf_vals), figsize=(7, 4.5 * length(Wf_vals)))
+
+    fig, ax = plt.subplots(nrows=length(Wf_vals), figsize=(7, 5 * length(Wf_vals)))
     SF = Any[Nothing for _ in couplingSets]
+    SFCoeffs = Any[Nothing for _ in couplingSets]
     Threads.@threads for (i, (Wf, Jp)) in couplingSets |> enumerate |> collect 
         t = "f"
         σ1 = σ # map(ωi -> minimum(abs.(last.(vcat(resultsPooled[(Wf, Jp)]["SF"]["Af_d_loc"]...)) .- ωi)) < 1e-2 ? σ : 0.0, ω)
@@ -527,12 +539,18 @@ function RealSpecFunc(
         Att = SpecFunc(vcat(resultsPooled[(Wf, Jp)]["SF"]["A$(t)_$(t)_loc"]...), ω, σ)
         At_t0 = resultsPooled[(Wf, Jp)][t*"Factor"] .* SpecFunc(vcat(resultsPooled[(Wf, Jp)]["SF"]["A$(t)_$(t)0_loc"]...), ω, σ2)
         SF[i] = (Att, At_t0, Af_d)
+        SFCoeffs[i] = vcat(
+                           map(p -> (p[1] * resultsPooled[(Wf, Jp)]["perpFactor"], p[2]), vcat(resultsPooled[(Wf, Jp)]["SF"]["Af_d_loc"]...)),
+                           map(p -> (p[1] * resultsPooled[(Wf, Jp)][t*"Factor"], p[2]), vcat(resultsPooled[(Wf, Jp)]["SF"]["A$(t)_$(t)0_loc"]...)),
+                           vcat(resultsPooled[(Wf, Jp)]["SF"]["A$(t)_$(t)_loc"]...),
+                          )
     end
-    for ((Att, At_t0, Af_d), (Wf, Jp)) in zip(SF, couplingSets)
-        axi = ax[findfirst(==(Wf), Wf_vals)]
+    for ((i, (Att, At_t0, Af_d)), (Wf, Jp)) in zip(enumerate(SF), couplingSets)
+        axi = length(Wf_vals) > 1 ? ax[findfirst(==(Wf), Wf_vals)] : ax
         axTitle = L"W_f = %$(round(Wf/COUPLINGS[\"Jf\"], digits=2))"
         # axi.plot(ω[ωp], Att[ωp], label=L"J_\perp = %$Jp", lw=3)
-        axi.plot(ω[ωp], Normalise(Att .+ Af_d .+ At_t0, ω)[ωp], label=L"J_\perp = %$Jp", lw=3)
+        SF[i] = Normalise(Att .+ Af_d .+ At_t0, ω)
+        axi.plot(ω[ωp], SF[i][ωp], label=L"J_\perp = %$Jp", lw=3)
         # axi.plot(ω[ωp], , label=L"J_\perp = %$Jp", lw=3)
         axi.legend()
         axi.set_title(axTitle)
@@ -542,6 +560,69 @@ function RealSpecFunc(
     end
     fig.tight_layout()
     fig.savefig("SFR-$size_BZ-$maxSize.pdf", bbox_inches="tight")
+
+    fig, ax = plt.subplots(nrows=length(Wf_vals), figsize=(7, 7 * length(Wf_vals)))
+    # if length(Wf_vals) == 1
+    #     ins = ax.inset_axes([0.6,0.0,0.4,0.5])
+    # else
+    #     ins = [ax[i].inset_axes([0.6,0.1,0.4,0.5]) for i in eachindex(Wf_vals)]
+    # end
+    SE = Any[Nothing for (Wf, Jp) in couplingSets]
+    SF_NI = SF[1][1:end]
+    # for (i, ωi) in enumerate(ω)
+    #     if abs(ωi) > 0.1
+    #         SF_NI[i] = 0.
+    #     end
+    # end
+    # ω = collect(-2:1e-4:2)
+    # δωp = log10(ω[ω .> 0][2] / ω[ω .> 0][1])
+    # ωpSample = 10 .^ (log10(ω[ω .> 0][1]):δωp:log10(maximum(ω)))
+    # ωp = unique([argmin(abs.(ω .- ωi)) for ωi in ωpSample])
+    # ω = 10 .^ (-5:0.01:-1)
+    Threads.@threads for (i, (Wf, Jp)) in couplingSets |> enumerate |> collect 
+        SE[i] = SelfEnergy(SF_NI, SF[i], ω; normalise=false)
+    end
+    δωp = log10(ω[ω .> 0][2] / ω[ω .> 0][1])
+    ωpSample = 10 .^ (log10(ω[ω .> 0][1]):δωp:log10(0.01))
+    ωp = unique([argmin(abs.(ω .- ωi)) for ωi in ωpSample])
+    modelLog(x, params) = params[1] .+ params[2] .* x
+    model(x, params) = params[1] .* (x.^params[2])
+    for (Σ, (Wf, Jp)) in zip(SE, couplingSets)
+        if Wf == 0 && Jp == 0
+            continue
+        end
+        axi = length(Wf_vals) > 1 ? ax[findfirst(==(Wf), Wf_vals)] : ax
+        # ins_i = length(Wf_vals) > 1 ? ins[findfirst(==(Wf), Wf_vals)] : ins
+        axTitle = L"W_f = %$(round(Wf/COUPLINGS[\"Jf\"], digits=2))"
+        Σeff = -1 ./ imag(Σ)[ωp]  .+ 1 / imag(Σ)[ω .≥ 0][1]
+        # Σeff[abs.(Σeff) .< 1e-6] .= 0
+        tries = 1000
+        errors = zeros(tries)
+        params = [[0., 0.] for _ in 1:tries]
+        @showprogress desc="Finding optimal parameters" Threads.@threads for i in 1:tries
+            fit = curve_fit(modelLog, log.(ω[ωp]), log.(Σeff), [rand(2)...])
+            errors[i] = sum(stderror(fit).^2)
+            params[i][2] = fit.param[2]
+            params[i][1] = exp(fit.param[1])
+        end
+        param = params[argmin(errors)]
+        println((Jp, minimum(errors)))
+        println((Jp, param))
+        axi.plot(ω[ωp], model(ω[ωp], param), lw=3)
+        axi.scatter(ω[ωp], Σeff, label=L"J_\perp = %$Jp, n=%$(round(param[2], digits=2))")
+        # ins_i.scatter(ω[ωp], -imag(Σ)[ωp])
+        axi.legend(bbox_to_anchor=(-0.2, -0.5, 1.2, 0), loc="lower center", ncol=2, mode="expand", borderaxespad=0.0, handletextpad=0.1,)
+        axi.set_title(axTitle)
+        axi.set_xlabel(L"\omega")
+        axi.set_ylabel(L"1/\Sigma^{\prime\prime}(\omega)")
+        axi.set_yscale("log")
+        axi.set_xscale("log")
+        # ins_i.set_xticks([])
+        # ins_i.set_yticks([])
+        # ins_i.set_ylabel(L"-\Sigma^{\prime\prime}")
+    end
+    fig.tight_layout()
+    fig.savefig("SER-$size_BZ-$maxSize.pdf", bbox_inches="tight")
 end
 
 
@@ -842,5 +923,8 @@ end
 # @time MomentumSpecFuncMap(33, 599, [0.11, 0.124, 0.1245, 0.1247, 0.1249, 0.125,], [-0.166,]; loadData=true)
 # @time MomentumSpecFuncMap(33, 601, 0.15:0.0005:0.154, [-0.1,]; loadData=true)
 # @time MomentumSpecFuncMap(33, 600, [0.32, 0.36, 0.37, 0.4, 0.41], [-0.05,]; loadData=true)
-@time RealSpecFunc(33, 609, [0., 0.3, 0.6], [-0.0, -0.1, -0.16, -0.17, -0.18]; loadData=true)
-#=@time RealSpecFunc(33, 1610, [0.2, 0.4], [-0., -0.06, -0.12, -0.1409, -0.147, -0.152, -0.1535, -0.16], 0.0; loadData=true)=#
+@time RealSpecFunc(33, 1609, [0., 0.15, 0.3, 0.4, 0.45, 0.6], [-0.0,]; loadData=true)
+@time RealSpecFunc(33, 1008, [0.32, 0.335, 0.36, 0.4, 0.42], [-0.05,]; loadData=true)
+@time RealSpecFunc(33, 1010, [1.51, 1.52, 1.53, 1.539], [-0.1,]; loadData=true)
+@time RealSpecFunc(33, 1011, [1.1, 1.15, 1.2, 1.25], [-0.166,]; loadData=true)
+# @time RealSpecFunc(33, 1609, [0., 0.2], [-0.0,]; loadData=true)
