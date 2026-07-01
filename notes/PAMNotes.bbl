@@ -6,7 +6,7 @@
 %Control: page (0) single
 %Control: year (1) truncated
 %Control: production of eprint (0) enabled
-\begin{thebibliography}{0}%
+\begin{thebibliography}{4}%
 \makeatletter
 \providecommand \@ifxundefined [1]{%
  \@ifx{#1\undefined}
@@ -49,4 +49,16 @@
 \providecommand \BibitemShut  [1]{\csname bibitem#1\endcsname}%
 \let\auto@bib@innerbib\@empty
 %</preamble>
+\bibitem [{\citenamefont {Mukherjee}\ \emph {et~al.}(2026)\citenamefont {Mukherjee}, \citenamefont {Hassan}, \citenamefont {Mukherjee}, \citenamefont {Vidhyadhiraja}, \citenamefont {Taraphder},\ and\ \citenamefont {Lal}}]{mukherjee2026}%
+  \BibitemOpen
+  \bibfield  {author} {\bibinfo {author} {\bibfnamefont {A.}~\bibnamefont {Mukherjee}}, \bibinfo {author} {\bibfnamefont {S.~R.}\ \bibnamefont {Hassan}}, \bibinfo {author} {\bibfnamefont {A.}~\bibnamefont {Mukherjee}}, \bibinfo {author} {\bibfnamefont {N.~S.}\ \bibnamefont {Vidhyadhiraja}}, \bibinfo {author} {\bibfnamefont {A.}~\bibnamefont {Taraphder}},\ and\ \bibinfo {author} {\bibfnamefont {S.}~\bibnamefont {Lal}},\ }\bibfield  {title} {\bibinfo {title} {Mott criticality as the confinement transition of a pseudogap-mott metal},\ }\href {https://doi.org/10.1088/1367-2630/ae36c8} {\bibfield  {journal} {\bibinfo  {journal} {New Journal of Physics}\ }\textbf {\bibinfo {volume} {28}},\ \bibinfo {pages} {013503} (\bibinfo {year} {2026})}\BibitemShut {NoStop}%
+\bibitem [{\citenamefont {Metzner}\ and\ \citenamefont {Vollhardt}(1989)}]{metzner_volhardt_1989}%
+  \BibitemOpen
+  \bibfield  {author} {\bibinfo {author} {\bibfnamefont {W.}~\bibnamefont {Metzner}}\ and\ \bibinfo {author} {\bibfnamefont {D.}~\bibnamefont {Vollhardt}},\ }\bibfield  {title} {\bibinfo {title} {Correlated lattice fermions in $d=\ensuremath{\infty}$ dimensions},\ }\href {https://doi.org/10.1103/PhysRevLett.62.324} {\bibfield  {journal} {\bibinfo  {journal} {Phys. Rev. Lett.}\ }\textbf {\bibinfo {volume} {62}},\ \bibinfo {pages} {324} (\bibinfo {year} {1989})}\BibitemShut {NoStop}%
+\bibitem [{\citenamefont {Mukherjee}\ \emph {et~al.}(2023)\citenamefont {Mukherjee}, \citenamefont {Vidhyadhiraja}, \citenamefont {Taraphder},\ and\ \citenamefont {Lal}}]{Mukherjee_2023}%
+  \BibitemOpen
+  \bibfield  {author} {\bibinfo {author} {\bibfnamefont {A.}~\bibnamefont {Mukherjee}}, \bibinfo {author} {\bibfnamefont {N.~S.}\ \bibnamefont {Vidhyadhiraja}}, \bibinfo {author} {\bibfnamefont {A.}~\bibnamefont {Taraphder}},\ and\ \bibinfo {author} {\bibfnamefont {S.}~\bibnamefont {Lal}},\ }\bibfield  {title} {\bibinfo {title} {Kondo frustration via charge fluctuations: a route to mott localisation},\ }\href {https://doi.org/10.1088/1367-2630/ad08f3} {\bibfield  {journal} {\bibinfo  {journal} {New Journal of Physics}\ }\textbf {\bibinfo {volume} {25}},\ \bibinfo {pages} {113011} (\bibinfo {year} {2023})}\BibitemShut {NoStop}%
+\bibitem [{\citenamefont {Mott}(1974)}]{mott1974}%
+  \BibitemOpen
+  \bibfield  {author} {\bibinfo {author} {\bibfnamefont {N.~F.}\ \bibnamefont {Mott}},\ }\bibfield  {title} {\bibinfo {title} {Rare-earth compounds with mixed valencies},\ }\href {https://doi.org/10.1080/14786439808206566} {\bibfield  {journal} {\bibinfo  {journal} {The Philosophical Magazine: A Journal of Theoretical Experimental and Applied Physics}\ }\textbf {\bibinfo {volume} {30}},\ \bibinfo {pages} {403} (\bibinfo {year} {1974})}\BibitemShut {NoStop}%
 \end{thebibliography}%
